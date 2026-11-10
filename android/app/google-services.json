@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "286142695589",
+    "project_id": "oldfort-0541-0576",
+    "storage_bucket": "oldfort-0541-0576.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:286142695589:android:a63b80d57781a19f48e54c",
+        "android_client_info": {
+          "package_name": "th.ac.kmitl.oldfort"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-Ir2XFuCYJjHLmHtrl1TQWeEnoalVVt4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
