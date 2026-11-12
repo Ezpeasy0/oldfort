@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RegisterInfoPage extends StatefulWidget {
   const RegisterInfoPage({super.key});
@@ -35,7 +36,7 @@ class _RegisterInfoPageState extends State<RegisterInfoPage> {
               // 1. Back Button
               GestureDetector(
                 onTap: () {
-                  Navigator.pop(context);
+                  FirebaseAuth.instance.signOut();
                 },
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

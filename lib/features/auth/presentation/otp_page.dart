@@ -1,20 +1,18 @@
 // lib/otp.dart
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-import 'info.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/utils/auth_error_text.dart';
+import '../../../core/utils/phone_utils.dart';
 
 class OtpPage extends StatefulWidget {
-  final String phoneNumber;
-  final String verificationId;
+  const OtpPage({super.key, required this.args});
 
-  const OtpPage({
-    super.key,
-    required this.phoneNumber,
-    required this.verificationId,
-  });
+  final OtpArgs args;
 
   @override
   State<OtpPage> createState() => _OtpPageState();
@@ -34,9 +32,15 @@ class _OtpPageState extends State<OtpPage> {
 
   static const Color backgroundColor = Color(0xFFF8F5F0);
 
+  late String _verificationId;
+  int? _resendToken;
+  bool _isVerifying = false;
+
   @override
   void initState() {
     super.initState();
+    _verificationId = widget.args.verificationId;
+    _resendToken = widget.args.resendToken;
     _startTimer();
   }
 
@@ -72,23 +76,29 @@ class _OtpPageState extends State<OtpPage> {
     super.dispose();
   }
 
-  // resend OTP
   Future<void> _resendOtp() async {
-    String formattedPhone = widget.phoneNumber.startsWith('0')
-        ? '+66${widget.phoneNumber.substring(1)}'
-        : widget.phoneNumber;
-
+    setState(() => _isResendActive = false);
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: formattedPhone,
+      phoneNumber: PhoneUtils.toE164(widget.args.phoneNumber),
+      forceResendingToken: _resendToken,
+      timeout: const Duration(seconds: 30),
       verificationCompleted: (PhoneAuthCredential credential) async {
         await FirebaseAuth.instance.signInWithCredential(credential);
+        if (mounted) _goNext();
       },
       verificationFailed: (FirebaseAuthException e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: ${e.message}')));
+        if (!mounted) return;
+        setState(() => _isResendActive = true);
+        _showError(authErrorText(e));
       },
-      codeSent: (String verificationId, int? resendingToken) {
+      codeSent: (String verificationId, int? resendToken) {
+        if (!mounted) return;
+        _verificationId = verificationId;
+        _resendToken = resendToken;
+        for (final controller in _controllers) {
+          controller.clear();
+        }
+        _focusNodes.first.requestFocus();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('ส่งรหัส OTP ใหม่เรียบร้อยแล้ว')),
         );
@@ -98,42 +108,42 @@ class _OtpPageState extends State<OtpPage> {
     );
   }
 
-  // Confirm OTP & Navigate to info.dart
   Future<void> _verifyOtpAndProceed() async {
-    String smsCode = _controllers.map((c) => c.text).join();
-
+    final smsCode = _controllers.map((c) => c.text).join();
     if (smsCode.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showError('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก');
       return;
     }
+    if (_isVerifying) return; 
+    setState(() => _isVerifying = true);
 
     try {
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: widget.verificationId,
+      final credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId,
         smsCode: smsCode,
       );
-
       await FirebaseAuth.instance.signInWithCredential(credential);
-
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const RegisterInfoPage()),
-      );
+      _goNext();
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('รหัส OTP ไม่ถูกต้อง: ${e.message}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showError(authErrorText(e));
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
     }
+  }
+
+  void _goNext() {
+    context.go(widget.args.isRegister ? AppRoutes.registerInfo : AppRoutes.home);
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontSize: 18)),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   @override
@@ -192,7 +202,7 @@ class _OtpPageState extends State<OtpPage> {
                     ),
                     const SizedBox(height: 30),
                     Text(
-                      'ที่ส่งไปยังเบอร์ ${widget.phoneNumber}',
+                      'ที่ส่งไปยังเบอร์ ${widget.args.phoneNumber}',
                       style: const TextStyle(
                         fontFamily: 'Itim',
                         fontSize: 18,

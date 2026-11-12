@@ -1,30 +1,22 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:oldfort/main.dart';
+import 'package:oldfort/core/utils/phone_utils.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('PhoneUtils', () {
+    test('รับเบอร์มือถือไทย 10 หลัก', () {
+      expect(PhoneUtils.isValidThaiMobile('0812345678'), isTrue);
+      expect(PhoneUtils.isValidThaiMobile('081-234-5678'), isTrue);
+      expect(PhoneUtils.isValidThaiMobile('0612345678'), isTrue);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('ปฏิเสธเบอร์ผิดรูปแบบ', () {
+      expect(PhoneUtils.isValidThaiMobile('021234567'), isFalse);
+      expect(PhoneUtils.isValidThaiMobile('081234567'), isFalse);
+      expect(PhoneUtils.isValidThaiMobile(''), isFalse);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('แปลงเป็น +66', () {
+      expect(PhoneUtils.toE164('0812345678'), '+66812345678');
+    });
   });
 }

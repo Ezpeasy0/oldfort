@@ -270,9 +270,13 @@ class _LoginPageState extends State<LoginPage> {
                 child: TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
                   style: const TextStyle(fontSize: 16, color: Colors.black87),
                   decoration: InputDecoration(
-                    hintText: '+66 XXXXXXXXX',
+                    hintText: '081234578',
                     hintStyle: TextStyle(
                       color: Colors.grey.shade400,
                       fontSize: 16,
