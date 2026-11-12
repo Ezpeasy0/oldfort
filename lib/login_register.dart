@@ -1,5 +1,8 @@
 // lib/login_register.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import 'otp.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -12,6 +15,7 @@ class _LoginPageState extends State<LoginPage> {
   // 0 = ลงชื่อเข้าใช้, 1 = ลงทะเบียน
   int _selectedTab = 0;
   final TextEditingController _phoneController = TextEditingController();
+  bool _isLoading = false;
 
   static const Color backgroundColor = Color(0xFFF8F5F0);
 
@@ -19,6 +23,84 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendOtp() async {
+    final phone = _phoneController.text.trim();
+
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณากรอกหมายเลขโทรศัพท์ก่อนดำเนินการ'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    String formattedPhone = phone.startsWith('0')
+        ? '+66${phone.substring(1)}'
+        : phone;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _selectedTab == 0
+              ? 'กำลังเข้าสู่ระบบด้วยเบอร์: $phone'
+              : 'กำลังลงทะเบียนด้วยเบอร์: $phone',
+        ),
+      ),
+    );
+
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: formattedPhone,
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        await FirebaseAuth.instance.signInWithCredential(credential);
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('ส่งรหัสไม่สำเร็จ: ${e.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      codeSent: (String verificationId, int? resendingToken) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  OtpPage(phoneNumber: phone, verificationId: verificationId),
+            ),
+          );
+        }
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      },
+    );
   }
 
   @override
@@ -242,18 +324,7 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    final phone = _phoneController.text;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          _selectedTab == 0
-                              ? 'กำลังเข้าสู่ระบบด้วยเบอร์: $phone'
-                              : 'กำลังลงทะเบียนด้วยเบอร์: $phone',
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: _isLoading ? null : _sendOtp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF342B1C),
                     foregroundColor: Colors.white,
@@ -262,14 +333,23 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(
-                    _selectedTab == 0 ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก',
-                    style: const TextStyle(
-                      fontFamily: 'Itim',
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Text(
+                          _selectedTab == 0 ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก',
+                          style: const TextStyle(
+                            fontFamily: 'Itim',
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
