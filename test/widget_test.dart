@@ -18,5 +18,10 @@ void main() {
     test('แปลงเป็น +66', () {
       expect(PhoneUtils.toE164('0812345678'), '+66812345678');
     });
+
+    test('แปลง +66 กลับเป็นเบอร์ที่ขึ้นต้นด้วย 0', () {
+      expect(PhoneUtils.toLocal('+66812345678'), '0812345678');
+      expect(PhoneUtils.toLocal(''), '');
+    });
   });
 }
