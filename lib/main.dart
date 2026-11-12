@@ -1,9 +1,12 @@
 // lib/main.dart
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app.dart';
+import 'core/settings/settings_controller.dart';
 import 'firebase_options.dart';
-import 'login_register.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,19 +14,12 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('Firebase connected: ${Firebase.app().options.projectId}');
 
-  runApp(const MyApp());
-}
+  final prefs = await SharedPreferences.getInstance();
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'OLDFORT',
-      theme: ThemeData(fontFamily: 'Sukhumvit Set'),
-      home: const LoginPage(),
-    );
-  }
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const OldfortApp(),
+    ),
+  );
 }

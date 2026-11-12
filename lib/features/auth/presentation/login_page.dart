@@ -1,8 +1,12 @@
 // lib/login_register.dart
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
-import 'otp.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/utils/auth_error_text.dart';
+import '../../../core/utils/phone_utils.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -12,7 +16,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // 0 = ลงชื่อเข้าใช้, 1 = ลงทะเบียน
+  // 0 = Log In, 1 = Register
   int _selectedTab = 0;
   final TextEditingController _phoneController = TextEditingController();
   bool _isLoading = false;
@@ -27,79 +31,53 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _sendOtp() async {
     final phone = _phoneController.text.trim();
-
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('กรุณากรอกหมายเลขโทรศัพท์ก่อนดำเนินการ'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (!PhoneUtils.isValidThaiMobile(phone)) {
+      _showError('กรุณากรอกเบอร์มือถือ 10 หลัก เช่น 0812345678');
       return;
     }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    String formattedPhone = phone.startsWith('0')
-        ? '+66${phone.substring(1)}'
-        : phone;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _selectedTab == 0
-              ? 'กำลังเข้าสู่ระบบด้วยเบอร์: $phone'
-              : 'กำลังลงทะเบียนด้วยเบอร์: $phone',
-        ),
-      ),
-    );
+    final isRegister = _selectedTab == 1;
+    setState(() => _isLoading = true);
 
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: formattedPhone,
+      phoneNumber: PhoneUtils.toE164(phone),
+      timeout: const Duration(seconds: 30),
+
       verificationCompleted: (PhoneAuthCredential credential) async {
         await FirebaseAuth.instance.signInWithCredential(credential);
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        context.go(isRegister ? AppRoutes.registerInfo : AppRoutes.home);
       },
       verificationFailed: (FirebaseAuthException e) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('ส่งรหัสไม่สำเร็จ: ${e.message}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        _showError(authErrorText(e));
       },
-      codeSent: (String verificationId, int? resendingToken) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  OtpPage(phoneNumber: phone, verificationId: verificationId),
-            ),
-          );
-        }
+      codeSent: (String verificationId, int? resendToken) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        context.push(
+          AppRoutes.otp,
+          extra: OtpArgs(
+            phoneNumber: phone,
+            verificationId: verificationId,
+            isRegister: isRegister,
+            resendToken: resendToken,
+          ),
+        );
       },
       codeAutoRetrievalTimeout: (String verificationId) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        if (mounted) setState(() => _isLoading = false);
       },
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontSize: 18)),
+        backgroundColor: Colors.red,
+      ),
     );
   }
 
