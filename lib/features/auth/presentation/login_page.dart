@@ -276,7 +276,7 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                   style: const TextStyle(fontSize: 16, color: Colors.black87),
                   decoration: InputDecoration(
-                    hintText: '081234578',
+                    hintText: '0812345678',
                     hintStyle: TextStyle(
                       color: Colors.grey.shade400,
                       fontSize: 16,
