@@ -1,13 +1,14 @@
-// lib/otp.dart
+// lib/features/auth/presentation/otp_page.dart
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/auth_error_text.dart';
 import '../../../core/utils/phone_utils.dart';
+import '../../../core/widgets/app_widgets.dart';
+import '../../../core/widgets/otp_code_field.dart';
 
 class OtpPage extends StatefulWidget {
   const OtpPage({super.key, required this.args});
@@ -19,22 +20,17 @@ class OtpPage extends StatefulWidget {
 }
 
 class _OtpPageState extends State<OtpPage> {
-  final List<TextEditingController> _controllers = List.generate(
-    6,
-    (index) => TextEditingController(),
-  );
-  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
+  final _codeController = TextEditingController();
 
-  // Expiry time
   Timer? _timer;
-  int _start = 30;
-  bool _isResendActive = false;
-
-  static const Color backgroundColor = Color(0xFFF8F5F0);
+  int _secondsLeft = 30;
 
   late String _verificationId;
   int? _resendToken;
   bool _isVerifying = false;
+  bool _isResending = false;
+
+  bool get _canResend => _secondsLeft == 0 && !_isResending;
 
   @override
   void initState() {
@@ -45,298 +41,132 @@ class _OtpPageState extends State<OtpPage> {
   }
 
   void _startTimer() {
-    setState(() {
-      _start = 30;
-      _isResendActive = false;
-    });
     _timer?.cancel();
+    _secondsLeft = 30;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_start == 0) {
-        setState(() {
-          timer.cancel();
-          _isResendActive = true;
-        });
-      } else {
-        setState(() {
-          _start--;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        if (_secondsLeft > 0) _secondsLeft--;
+        if (_secondsLeft == 0) timer.cancel();
+      });
     });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    for (var node in _focusNodes) {
-      node.dispose();
-    }
+    _codeController.dispose();
     super.dispose();
   }
 
   Future<void> _resendOtp() async {
-    setState(() => _isResendActive = false);
+    setState(() => _isResending = true);
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: PhoneUtils.toE164(widget.args.phoneNumber),
       forceResendingToken: _resendToken,
       timeout: const Duration(seconds: 30),
-      verificationCompleted: (PhoneAuthCredential credential) async {
-        await FirebaseAuth.instance.signInWithCredential(credential);
-        if (mounted) _goNext();
-      },
+      verificationCompleted: (PhoneAuthCredential credential) =>
+          _signIn(credential),
       verificationFailed: (FirebaseAuthException e) {
         if (!mounted) return;
-        setState(() => _isResendActive = true);
-        _showError(authErrorText(e));
+        setState(() => _isResending = false);
+        showAppSnack(context, authErrorText(e), isError: true);
       },
       codeSent: (String verificationId, int? resendToken) {
         if (!mounted) return;
-        _verificationId = verificationId;
-        _resendToken = resendToken;
-        for (final controller in _controllers) {
-          controller.clear();
-        }
-        _focusNodes.first.requestFocus();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ส่งรหัส OTP ใหม่เรียบร้อยแล้ว')),
-        );
-        _startTimer();
+        setState(() {
+          _verificationId = verificationId;
+          _resendToken = resendToken;
+          _isResending = false;
+          _codeController.clear();
+          _startTimer();
+        });
+        showAppSnack(context, 'ส่งรหัส OTP ใหม่เรียบร้อยแล้ว');
       },
       codeAutoRetrievalTimeout: (String verificationId) {},
     );
   }
 
-  Future<void> _verifyOtpAndProceed() async {
-    final smsCode = _controllers.map((c) => c.text).join();
-    if (smsCode.length < 6) {
-      _showError('กรุณากรอกรหัส OTP ให้ครบ 6 หลัก');
+  Future<void> _verify(String code) async {
+    if (_isVerifying) return;
+    if (code.length < 6) {
+      showAppSnack(context, 'กรุณากรอกรหัส OTP ให้ครบ 6 หลัก', isError: true);
       return;
     }
-    if (_isVerifying) return; 
-    setState(() => _isVerifying = true);
+    final credential = PhoneAuthProvider.credential(
+      verificationId: _verificationId,
+      smsCode: code,
+    );
+    await _signIn(credential);
+  }
 
+  Future<void> _signIn(PhoneAuthCredential credential) async {
+    if (_isVerifying) return;
+    setState(() => _isVerifying = true);
     try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId,
-        smsCode: smsCode,
-      );
       await FirebaseAuth.instance.signInWithCredential(credential);
-      if (!mounted) return;
-      _goNext();
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      _showError(authErrorText(e));
+      _codeController.clear();
+      showAppSnack(context, authErrorText(e), isError: true);
     } finally {
       if (mounted) setState(() => _isVerifying = false);
     }
   }
 
-  void _goNext() {
-    context.go(widget.args.isRegister ? AppRoutes.registerInfo : AppRoutes.home);
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(fontSize: 18)),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    String timerText = '00 : ${_start.toString().padLeft(2, '0')}';
+    final scheme = Theme.of(context).colorScheme;
+    final timerText = '00 : ${_secondsLeft.toString().padLeft(2, '0')}';
 
     return Scaffold(
-      backgroundColor: backgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. back button
-              GestureDetector(
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
-                      Icons.arrow_back_ios,
-                      size: 16,
-                      color: Color(0xFF090909),
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'ย้อนกลับ',
-                      style: TextStyle(
-                        fontFamily: 'Itim',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF6B553D),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 80),
-
-              // 2. Descriptions
+              const BackTextButton(),
+              const SizedBox(height: 48),
+              const PageTitle('กรอกรหัส OTP'),
+              const SizedBox(height: 16),
               Center(
-                child: Column(
-                  children: [
-                    const Text(
-                      'กรอกรหัส OTP',
-                      style: TextStyle(
-                        fontFamily: 'Itim',
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF6B553D),
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    Text(
-                      'ที่ส่งไปยังเบอร์ ${widget.args.phoneNumber}',
-                      style: const TextStyle(
-                        fontFamily: 'Itim',
-                        fontSize: 18,
-                        color: Color(0xFF6C7278),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // 3. OTP Text
-              const Padding(
-                padding: EdgeInsets.only(left: 4.0, bottom: 8.0),
                 child: Text(
-                  'OTP',
-                  style: TextStyle(
-                    fontFamily: 'Itim',
-                    fontSize: 16,
-                    color: Color(0xFF6C7278),
-                    fontWeight: FontWeight.w500,
-                  ),
+                  'ที่ส่งไปยังเบอร์ ${widget.args.phoneNumber}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, color: scheme.onSurfaceVariant),
                 ),
               ),
-
-              // 4. Fill OTP
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 50,
-                    height: 60,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _controllers[index],
-                        focusNode: _focusNodes[index],
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        textAlignVertical: TextAlignVertical.center,
-                        maxLength: 1,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                        decoration: const InputDecoration(
-                          counterText: '',
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        onChanged: (value) {
-                          if (value.isNotEmpty && index < 5) {
-                            _focusNodes[index + 1].requestFocus();
-                          } else if (value.isEmpty && index > 0) {
-                            _focusNodes[index - 1].requestFocus();
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                }),
+              const SizedBox(height: 32),
+              Text('OTP', style: TextStyle(fontSize: 18, color: scheme.tertiary)),
+              const SizedBox(height: 8),
+              OtpCodeField(
+                controller: _codeController,
+                onCompleted: _verify,
               ),
-              const SizedBox(height: 24),
-
-              // 5. Expire Time
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  timerText,
-                  style: const TextStyle(
-                    fontFamily: 'Itim',
-                    fontSize: 16,
-                    color: Color(0xFF6C7278),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // 6. Resend OTP
-              Align(
-                alignment: Alignment.centerLeft,
-                child: GestureDetector(
-                  onTap: _isResendActive ? _resendOtp : null,
+              const SizedBox(height: 16),
+              if (_secondsLeft > 0)
+                Center(
                   child: Text(
-                    'ขอรหัส OTP ใหม่',
-                    style: TextStyle(
-                      fontFamily: 'Itim',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: _isResendActive
-                          ? Color(0xFF6B553D)
-                          : Colors.grey.shade400, // สีเทาถ้ายังนับเวลาไม่หมด
-                    ),
+                    timerText,
+                    style: TextStyle(fontSize: 18, color: scheme.onSurfaceVariant),
                   ),
                 ),
+              TextButton(
+                onPressed: _canResend ? _resendOtp : null,
+                child: const Text('ขอรหัส OTP ใหม่'),
               ),
-              const SizedBox(height: 50),
-
-              // 7. Confirm Button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _verifyOtpAndProceed,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF342B1C),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'ยืนยันรหัส',
-                    style: TextStyle(
-                      fontFamily: 'Itim',
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed:
+                    _isVerifying ? null : () => _verify(_codeController.text),
+                child: _isVerifying
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Text('ยืนยันรหัส'),
               ),
             ],
           ),

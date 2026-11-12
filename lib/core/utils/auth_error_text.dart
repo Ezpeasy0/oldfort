@@ -1,4 +1,3 @@
-// lib/core/utils/auth_error_text.dart
 import 'package:firebase_auth/firebase_auth.dart';
 
 String authErrorText(FirebaseAuthException e) {
@@ -16,6 +15,11 @@ String authErrorText(FirebaseAuthException e) {
       return 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต';
     case 'quota-exceeded':
       return 'ระบบส่ง SMS ไม่ได้ชั่วคราว กรุณาลองใหม่ภายหลัง';
+    case 'credential-already-in-use':
+    case 'account-exists-with-different-credential':
+      return 'เบอร์นี้ถูกใช้กับบัญชีอื่นแล้ว';
+    case 'requires-recent-login':
+      return 'เพื่อความปลอดภัย กรุณาออกจากระบบแล้วเข้าใหม่ก่อนเปลี่ยนเบอร์';
     default:
       return 'เกิดข้อผิดพลาด (${e.code}) กรุณาลองใหม่อีกครั้ง';
   }

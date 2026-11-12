@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validText(value, maxLen) {
+      return value is string && value.size() > 0 && value.size() <= maxLen;
+    }
+
+    function validNames(data) {
+      return validText(data.firstName, 50)
+        && validText(data.lastName, 50)
+        && validText(data.nickname, 30);
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+             'phone', 'firstName', 'lastName', 'nickname', 'role',
+             'pdpaVersion', 'pdpaAcceptedAt', 'createdAt', 'updatedAt'])
+        && request.resource.data.role == 'member'
+        && request.resource.data.phone == request.auth.token.phone_number
+        && request.resource.data.pdpaAcceptedAt == request.time
+        && validNames(request.resource.data);
+
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['firstName', 'lastName', 'nickname', 'phone', 'updatedAt'])
+        && request.resource.data.phone == request.auth.token.phone_number
+        && validNames(request.resource.data);
+
+      allow delete: if false;
+    }
+  }
+}
