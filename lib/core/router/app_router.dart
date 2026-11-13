@@ -6,6 +6,10 @@ import '../../features/auth/presentation/otp_page.dart';
 import '../../features/auth/presentation/pdpa_page.dart';
 import '../../features/auth/presentation/register_info_page.dart';
 import '../../features/auth/presentation/splash_page.dart';
+import '../../features/chat/presentation/chat_hub_page.dart';
+import '../../features/chat/presentation/chat_room_page.dart';
+import '../../features/chat/presentation/group_settings_page.dart';
+import '../../features/chat/presentation/private_chats_page.dart';
 import '../../features/friends/presentation/friends_page.dart';
 import '../../features/friends/presentation/user_profile_page.dart';
 import '../../features/home/presentation/home_page.dart';
@@ -30,8 +34,16 @@ class AppRoutes {
   static const display = '/settings/display';
   static const friends = '/friends';
   static const userProfile = '/user/:uid';
+  static const chat = '/chat';
+  static const communityRooms = '/chat/community';
+  static const privateChats = '/chat/private';
+  static const createGroup = '/chat/private/new-group';
+  static const chatRoom = '/chat/room/:chatId';
+  static const groupSettings = '/chat/room/:chatId/settings';
 
   static String userProfilePath(String uid) => '/user/$uid';
+  static String chatRoomPath(String chatId) => '/chat/room/$chatId';
+  static String groupSettingsPath(String chatId) => '/chat/room/$chatId/settings';
 }
 
 class OtpArgs {
@@ -140,6 +152,32 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.userProfile,
         builder: (context, state) =>
             UserProfilePage(uid: state.pathParameters['uid']!),
+      ),
+      GoRoute(
+        path: AppRoutes.chat,
+        builder: (context, state) => const ChatHubPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.communityRooms,
+        builder: (context, state) => const CommunityRoomsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.privateChats,
+        builder: (context, state) => const PrivateChatsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.createGroup,
+        builder: (context, state) => const CreateGroupPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.chatRoom,
+        builder: (context, state) =>
+            ChatRoomPage(chatId: state.pathParameters['chatId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.groupSettings,
+        builder: (context, state) =>
+            GroupSettingsPage(chatId: state.pathParameters['chatId']!),
       ),
     ],
   );

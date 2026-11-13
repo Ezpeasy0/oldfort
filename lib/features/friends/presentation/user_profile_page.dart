@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../data/friend_repository.dart';
 import 'friend_widgets.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/router/app_router.dart';
+import '../../chat/data/chat_repository.dart';
 
 class UserProfilePage extends ConsumerStatefulWidget {
   const UserProfilePage({super.key, required this.uid});
@@ -26,6 +29,22 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
     } on FirebaseException catch (e) {
       if (mounted) {
         showAppSnack(context, 'ทำรายการไม่สำเร็จ (${e.code})', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openChat(String myUid) async {
+    setState(() => _busy = true);
+    try {
+      final chatId =
+          await ref.read(chatRepositoryProvider).ensurePrivateChat(myUid, widget.uid);
+      if (!mounted) return;
+      context.push(AppRoutes.chatRoomPath(chatId));
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        showAppSnack(context, 'เปิดแชทไม่สำเร็จ (${e.code})', isError: true);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -144,10 +163,8 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
       buttons = [
         SmallButton(
           label: 'ส่งข้อความ',
-          // แชทส่วนตัวทำใน Step 5B
-          onPressed: _busy
-              ? null
-              : () => showAppSnack(context, 'แชทส่วนตัวกำลังพัฒนา เร็ว ๆ นี้'),
+
+          onPressed: _busy ? null : () => _openChat(myUid),
         ),
         SmallButton(
           label: 'ลบเพื่อน',

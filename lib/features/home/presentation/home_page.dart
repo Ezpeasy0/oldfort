@@ -40,7 +40,7 @@ class HomePage extends ConsumerWidget {
 
     const menus = <_MenuItem>[
       _MenuItem('การแจ้งเตือน\nสุขภาพ', Icons.notifications_none_rounded),
-      _MenuItem('แชท พูดคุย', Icons.chat_bubble_outline_rounded),
+      _MenuItem('แชท พูดคุย', Icons.chat_bubble_outline_rounded, AppRoutes.chat),
       _MenuItem('เพื่อน', Icons.people_outline_rounded, AppRoutes.friends),
       _MenuItem('เกมทดสอบ\nสุขภาพ', Icons.sports_esports_outlined),
       _MenuItem('บทความสุขภาพ', Icons.description_outlined),
