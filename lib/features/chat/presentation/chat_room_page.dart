@@ -332,7 +332,7 @@ class _RoomHeader extends ConsumerWidget {
                   ),
                 ),
               ),
-              if (action != null) action,
+              ?action,
             ],
           ),
         ],
