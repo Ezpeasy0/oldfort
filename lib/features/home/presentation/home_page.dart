@@ -11,8 +11,14 @@ import '../../user/data/user_repository.dart';
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
-  void _comingSoon(BuildContext context) =>
+  void _openMenu(BuildContext context, _MenuItem item) {
+    final route = item.route;
+    if (route == null) {
       showAppSnack(context, 'เมนูนี้กำลังพัฒนา เร็ว ๆ นี้');
+    } else {
+      context.push(route);
+    }
+  }
 
   Future<void> _callSos(BuildContext context) async {
     final uri = Uri(scheme: 'tel', path: '1669');
@@ -35,7 +41,7 @@ class HomePage extends ConsumerWidget {
     const menus = <_MenuItem>[
       _MenuItem('การแจ้งเตือน\nสุขภาพ', Icons.notifications_none_rounded),
       _MenuItem('แชท พูดคุย', Icons.chat_bubble_outline_rounded),
-      _MenuItem('เพื่อน', Icons.people_outline_rounded),
+      _MenuItem('เพื่อน', Icons.people_outline_rounded, AppRoutes.friends),
       _MenuItem('เกมทดสอบ\nสุขภาพ', Icons.sports_esports_outlined),
       _MenuItem('บทความสุขภาพ', Icons.description_outlined),
       _MenuItem('แบบสอบถาม\nสุขภาพทั่วไป', Icons.question_mark_rounded),
@@ -59,14 +65,14 @@ class HomePage extends ConsumerWidget {
                           Expanded(
                             child: _MenuTile(
                               item: menus[i],
-                              onTap: () => _comingSoon(context),
+                              onTap: () => _openMenu(context, menus[i]),
                             ),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
                             child: _MenuTile(
                               item: menus[i + 1],
-                              onTap: () => _comingSoon(context),
+                              onTap: () => _openMenu(context, menus[i + 1]),
                             ),
                           ),
                         ],
@@ -114,10 +120,11 @@ class HomePage extends ConsumerWidget {
 }
 
 class _MenuItem {
-  const _MenuItem(this.label, this.icon);
+  const _MenuItem(this.label, this.icon, [this.route]);
 
   final String label;
   final IconData icon;
+  final String? route;
 }
 
 class _Header extends StatelessWidget {

@@ -38,10 +38,18 @@ class UserRepository {
   }
 
   Future<void> updateName(String uid, String field, String value) {
-    return _doc(uid).update({
-      field: value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final batch = _db.batch()
+      ..update(_doc(uid), {
+        field: value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    if (field == 'nickname') {
+      batch.update(_db.collection('publicProfiles').doc(uid), {
+        'nickname': value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    return batch.commit();
   }
 
   Future<void> updatePhone(String uid, String phoneE164) {

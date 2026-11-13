@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../friends/data/friend_repository.dart';
 import '../../user/data/app_user.dart';
 import '../../user/data/user_repository.dart';
 
@@ -45,6 +46,7 @@ class ProfilePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final profile = ref.watch(currentUserProfileProvider).value;
+    final friendCode = ref.watch(myPublicProfileProvider).value?.friendCode;
 
     return Scaffold(
       body: SafeArea(
@@ -77,8 +79,8 @@ class ProfilePage extends ConsumerWidget {
                   ),
                   Center(
                     child: SelectableText(
-                      'UID: ${profile.uid}',
-                      style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant),
+                      'รหัสเพื่อน: ${friendCode ?? '...'}',
+                      style: TextStyle(fontSize: 18, color: scheme.onSurfaceVariant),
                     ),
                   ),
                   const SizedBox(height: 24),

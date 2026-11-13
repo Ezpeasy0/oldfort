@@ -3,8 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function signedIn() {
+      return request.auth != null;
+    }
+
     function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
+      return signedIn() && request.auth.uid == uid;
     }
 
     function validText(value, maxLen) {
@@ -15,6 +19,11 @@ service cloud.firestore {
       return validText(data.firstName, 50)
         && validText(data.lastName, 50)
         && validText(data.nickname, 30);
+    }
+
+    function areFriends(a, b) {
+      return exists(/databases/$(database)/documents/friendships/$(a + '_' + b))
+        || exists(/databases/$(database)/documents/friendships/$(b + '_' + a));
     }
 
     match /users/{uid} {
@@ -36,6 +45,74 @@ service cloud.firestore {
         && validNames(request.resource.data);
 
       allow delete: if false;
+    }
+
+    match /publicProfiles/{uid} {
+      allow get: if signedIn();
+
+      allow create: if isOwner(uid)
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && request.resource.data.keys().hasOnly(['nickname', 'friendCode', 'updatedAt'])
+        && validText(request.resource.data.nickname, 30)
+        && getAfter(/databases/$(database)/documents/friendCodes/$(request.resource.data.friendCode)).data.uid == uid;
+
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['nickname', 'updatedAt'])
+        && validText(request.resource.data.nickname, 30);
+
+      allow delete: if false;
+    }
+
+    match /friendCodes/{code} {
+      allow get: if signedIn();
+
+      allow create: if signedIn()
+        && code.matches('^[A-Z2-9]{6}$')
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.friendCode == code;
+
+      allow update, delete: if false;
+    }
+
+    match /friendRequests/{requestId} {
+      allow get: if signedIn() && request.auth.uid in requestId.split('_');
+      allow list: if signedIn()
+        && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+
+      allow create: if signedIn()
+        && requestId == request.auth.uid + '_' + request.resource.data.to
+        && request.resource.data.keys().hasOnly(['from', 'to', 'createdAt'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to != request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/publicProfiles/$(request.resource.data.to))
+        && !areFriends(request.auth.uid, request.resource.data.to);
+
+      allow delete: if signedIn() && request.auth.uid in requestId.split('_');
+      allow update: if false;
+    }
+
+    match /friendships/{pairId} {
+      allow get: if signedIn() && request.auth.uid in pairId.split('_');
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['memberIds', 'createdAt'])
+        && request.resource.data.memberIds.size() == 2
+        && request.resource.data.memberIds[0] < request.resource.data.memberIds[1]
+        && pairId == request.resource.data.memberIds[0] + '_' + request.resource.data.memberIds[1]
+        && request.resource.data.createdAt == request.time
+        && (
+          (request.auth.uid == request.resource.data.memberIds[1]
+            && exists(/databases/$(database)/documents/friendRequests/$(request.resource.data.memberIds[0] + '_' + request.resource.data.memberIds[1])))
+          || (request.auth.uid == request.resource.data.memberIds[0]
+            && exists(/databases/$(database)/documents/friendRequests/$(request.resource.data.memberIds[1] + '_' + request.resource.data.memberIds[0])))
+        );
+
+      allow delete: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow update: if false;
     }
   }
 }

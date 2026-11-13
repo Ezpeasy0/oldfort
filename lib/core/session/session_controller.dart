@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/friends/data/friend_repository.dart';
+
 enum SessionStatus { loading, signedOut, needsProfile, ready, error }
 
 class SessionController extends ChangeNotifier {
@@ -24,6 +26,7 @@ class SessionController extends ChangeNotifier {
   String? errorMessage;
 
   String? _phoneSyncTried;
+  String? _publicProfileChecked;
 
   void _onAuthChanged(User? user) {
     _profileSub?.cancel();
@@ -43,6 +46,7 @@ class SessionController extends ChangeNotifier {
       (snap) {
         if (snap.exists) {
           _syncPhoneIfNeeded(user.uid, snap.data());
+          _ensurePublicProfile(user.uid, snap);
           _setStatus(SessionStatus.ready);
         } else if (!snap.metadata.isFromCache) {
 
@@ -51,7 +55,7 @@ class SessionController extends ChangeNotifier {
 
       },
       onError: (Object e) {
-        if (_auth.currentUser == null) return; 
+        if (_auth.currentUser == null) return;
         errorMessage = e.toString();
         _setStatus(SessionStatus.error);
       },
@@ -69,6 +73,18 @@ class SessionController extends ChangeNotifier {
       'updatedAt': FieldValue.serverTimestamp(),
     }).catchError((Object e) {
       debugPrint('sync phone failed: $e');
+    });
+  }
+
+  void _ensurePublicProfile(
+      String uid, DocumentSnapshot<Map<String, dynamic>> snap) {
+    if (_publicProfileChecked == uid) return;
+    if (snap.metadata.hasPendingWrites) return;
+    _publicProfileChecked = uid;
+    final nickname = snap.data()?['nickname'] as String? ?? '';
+    FriendRepository(_db).ensurePublicProfile(uid, nickname).catchError((Object e) {
+      debugPrint('ensure public profile failed: $e');
+      _publicProfileChecked = null;
     });
   }
 

@@ -1,4 +1,3 @@
-// lib/core/router/app_router.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +6,8 @@ import '../../features/auth/presentation/otp_page.dart';
 import '../../features/auth/presentation/pdpa_page.dart';
 import '../../features/auth/presentation/register_info_page.dart';
 import '../../features/auth/presentation/splash_page.dart';
+import '../../features/friends/presentation/friends_page.dart';
+import '../../features/friends/presentation/user_profile_page.dart';
 import '../../features/home/presentation/home_page.dart';
 import '../../features/settings/presentation/change_phone_page.dart';
 import '../../features/settings/presentation/display_settings_page.dart';
@@ -27,6 +28,10 @@ class AppRoutes {
   static const profile = '/settings/profile';
   static const changePhone = '/settings/profile/phone';
   static const display = '/settings/display';
+  static const friends = '/friends';
+  static const userProfile = '/user/:uid';
+
+  static String userProfilePath(String uid) => '/user/$uid';
 }
 
 class OtpArgs {
@@ -126,6 +131,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.display,
         builder: (context, state) => const DisplaySettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.friends,
+        builder: (context, state) => const FriendsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.userProfile,
+        builder: (context, state) =>
+            UserProfilePage(uid: state.pathParameters['uid']!),
       ),
     ],
   );
