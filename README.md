@@ -1,17 +1,23 @@
-# oldfort
+# Oldfort
 
-A new Flutter project.
+แอปพลิเคชันโอลด์ฟอร์ท เพื่อการดูแลสุขภาพ ความปลอดภัย และแชทสำหรับผู้สูงอายุ
 
-## Getting Started
+## Overview
 
-This project is a starting point for a Flutter application.
+แอป Android สำหรับผู้สูงอายุไทย รวมเครื่องมือดูแลสุขภาพ การติดต่อฉุกเฉิน และการพูดคุยกับเพื่อนไว้ในแอปเดียว ออกแบบให้ใช้งานง่าย ตัวอักษรใหญ่ ปุ่มใหญ่ และปรับขนาดตัวอักษรและโหมดมืดได้ 
 
-A few resources to get you started if this is your first Flutter project:
+## Features
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- สมัครและเข้าสู่ระบบด้วยเบอร์โทรศัพท์
+- การแจ้งเตือนกินยา ดื่มน้ำ ออกกำลังกาย และคำนวณ BMI
+- โทร 1669 (เหตุฉุกเฉิน)
+- เพื่อน แชทส่วนตัว และแชทชุมชน
+- เกมทดสอบความจำและฝึกการฟัง
+- แบบสอบถามสุขภาพทั่วไป (GHQ-12)
+- บทความสุขภาพและหมวดหมู่
+- ติดต่อขอความช่วยเหลือกับฝ่ายสนุนภายในแอป
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Technology
+
+- **Flutter** (Android, ขั้นต่ำ Android 8.0 / API 26)
+- **Firebase**: Authentication (Phone), Cloud Firestore
