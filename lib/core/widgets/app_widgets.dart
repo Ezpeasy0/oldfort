@@ -14,7 +14,8 @@ class BackTextButton extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: onTap ??
+        onTap:
+            onTap ??
             () {
               if (context.canPop()) context.pop();
             },
@@ -134,7 +135,9 @@ class SegmentedTabs extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: i == selectedIndex ? scheme.surface : Colors.transparent,
+                    color: i == selectedIndex
+                        ? scheme.surface
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(9),
                     boxShadow: i == selectedIndex
                         ? [
@@ -150,8 +153,9 @@ class SegmentedTabs extends StatelessWidget {
                     labels[i],
                     style: TextStyle(
                       fontSize: 18,
-                      fontWeight:
-                          i == selectedIndex ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: i == selectedIndex
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       color: i == selectedIndex
                           ? scheme.onSurface
                           : scheme.onSurfaceVariant,
@@ -166,14 +170,25 @@ class SegmentedTabs extends StatelessWidget {
   }
 }
 
-void showAppSnack(BuildContext context, String message, {bool isError = false}) {
+void showAppSnack(
+  BuildContext context,
+  String message, {
+  bool isError = false,
+}) {
   final scheme = Theme.of(context).colorScheme;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontSize: 18, color: Colors.white)),
+        content: Center(
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, color: Colors.white),
+          ),
+        ),
         backgroundColor: isError ? scheme.error : const Color(0xFF342B1C),
+        behavior: SnackBarBehavior.floating,
       ),
     );
 }
