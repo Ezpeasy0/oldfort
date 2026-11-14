@@ -1,5 +1,4 @@
 // lib/features/auth/presentation/login_page.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,7 +17,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  int _selectedTab = 0; // 0 = log in, 1 = register
+
+  int _selectedTab = 0;
   final _phoneController = TextEditingController();
   bool _isLoading = false;
 
@@ -31,95 +31,48 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _sendOtp() async {
     final phone = _phoneController.text.trim();
     if (!PhoneUtils.isValidThaiMobile(phone)) {
-      showAppSnack(
-        context,
-        'กรุณากรอกเบอร์มือถือ 10 หลัก เช่น 0812345678',
-        isError: true,
-      );
+      showAppSnack(context, 'กรุณากรอกเบอร์มือถือ 10 หลัก เช่น 0812345678',
+          isError: true);
       return;
     }
-
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
-    try {
-      final formattedPhone = PhoneUtils.toE164(phone);
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: PhoneUtils.toE164(phone),
+      timeout: const Duration(seconds: 30),
 
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('phone', isEqualTo: formattedPhone)
-          .limit(1)
-          .get();
+      verificationCompleted: (PhoneAuthCredential credential) async {
+        try {
+          await FirebaseAuth.instance.signInWithCredential(credential);
 
-      final userExists = querySnapshot.docs.isNotEmpty;
-
-      if (_selectedTab == 0) {
-        if (!userExists) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            showAppSnack(
-              context,
-              'โปรดสมัครบัญชีก่อนเพื่อเข้าสู่ระบบ',
-              isError: true,
-            );
-          }
-          return;
-        }
-      } else {
-        if (userExists) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            showAppSnack(
-              context,
-              'เบอร์นี้มีบัญชีในระบบแล้ว กรุณาเปลี่ยนไปที่แท็บ "ลงชื่อเข้าใช้"',
-              isError: true,
-            );
-          }
-          return;
-        }
-      }
-
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: formattedPhone,
-        timeout: const Duration(seconds: 30),
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          try {
-            await FirebaseAuth.instance.signInWithCredential(credential);
-          } on FirebaseAuthException catch (e) {
-            if (mounted) showAppSnack(context, authErrorText(e), isError: true);
-          } finally {
-            if (mounted) setState(() => _isLoading = false);
-          }
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          if (!mounted) return;
-          setState(() => _isLoading = false);
-          showAppSnack(context, authErrorText(e), isError: true);
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          if (!mounted) return;
-          setState(() => _isLoading = false);
-          context.push(
-            AppRoutes.otp,
-            extra: OtpArgs(
-              phoneNumber: phone,
-              verificationId: verificationId,
-              resendToken: resendToken,
-              isRegister: _selectedTab == 1,
-            ),
-          );
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
+        } on FirebaseAuthException catch (e) {
+          if (mounted) showAppSnack(context, authErrorText(e), isError: true);
+        } finally {
           if (mounted) setState(() => _isLoading = false);
-        },
-      );
-    } catch (e) {
-      debugPrint('LOGIN ERROR: $e');
-      if (mounted) {
+        }
+      },
+      verificationFailed: (FirebaseAuthException e) {
+        if (!mounted) return;
         setState(() => _isLoading = false);
-        showAppSnack(context, 'เกิดข้อผิดพลาด: ${e.toString()}', isError: true);
-      }
-    }
+        showAppSnack(context, authErrorText(e), isError: true);
+      },
+      codeSent: (String verificationId, int? resendToken) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        context.push(
+          AppRoutes.otp,
+          extra: OtpArgs(
+            phoneNumber: phone,
+            verificationId: verificationId,
+            resendToken: resendToken,
+          ),
+        );
+      },
+      codeAutoRetrievalTimeout: (String verificationId) {
+        if (mounted) setState(() => _isLoading = false);
+      },
+    );
   }
 
   @override

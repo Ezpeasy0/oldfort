@@ -43,8 +43,7 @@ class AppRoutes {
 
   static String userProfilePath(String uid) => '/user/$uid';
   static String chatRoomPath(String chatId) => '/chat/room/$chatId';
-  static String groupSettingsPath(String chatId) =>
-      '/chat/room/$chatId/settings';
+  static String groupSettingsPath(String chatId) => '/chat/room/$chatId/settings';
 }
 
 class OtpArgs {
@@ -52,13 +51,11 @@ class OtpArgs {
     required this.phoneNumber,
     required this.verificationId,
     this.resendToken,
-    this.isRegister = false,
   });
 
   final String phoneNumber; // 0812345678
   final String verificationId;
   final int? resendToken;
-  final bool isRegister;
 }
 
 class RegisterDraft {
@@ -91,12 +88,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           _authFlow.contains(location) ? null : AppRoutes.login,
         SessionStatus.needsProfile =>
           _onboarding.contains(location) ? null : AppRoutes.registerInfo,
-        SessionStatus.ready =>
-          (location == AppRoutes.splash ||
-                  _authFlow.contains(location) ||
-                  _onboarding.contains(location))
-              ? AppRoutes.home
-              : null,
+        SessionStatus.ready => (location == AppRoutes.splash ||
+                _authFlow.contains(location) ||
+                _onboarding.contains(location))
+            ? AppRoutes.home
+            : null,
       };
     },
     routes: [

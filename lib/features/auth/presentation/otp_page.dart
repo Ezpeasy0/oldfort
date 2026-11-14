@@ -1,10 +1,8 @@
 // lib/features/auth/presentation/otp_page.dart
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/auth_error_text.dart';
@@ -106,40 +104,11 @@ class _OtpPageState extends State<OtpPage> {
     if (_isVerifying) return;
     setState(() => _isVerifying = true);
     try {
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(
-        credential,
-      );
-      final user = userCredential.user;
-
-      if (!mounted) return;
-
-      if (widget.args.isRegister) {
-        context.go(AppRoutes.registerInfo);
-      } else {
-        if (user != null) {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-
-          if (!mounted) return;
-
-          if (userDoc.exists) {
-            context.go(AppRoutes.home);
-          } else {
-            context.go(AppRoutes.registerInfo);
-          }
-        } else {
-          context.go(AppRoutes.home);
-        }
-      }
+      await FirebaseAuth.instance.signInWithCredential(credential);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       _codeController.clear();
       showAppSnack(context, authErrorText(e), isError: true);
-    } catch (e) {
-      if (!mounted) return;
-      showAppSnack(context, 'เกิดข้อผิดพลาด: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isVerifying = false);
     }
@@ -165,28 +134,22 @@ class _OtpPageState extends State<OtpPage> {
                 child: Text(
                   'ที่ส่งไปยังเบอร์ ${widget.args.phoneNumber}',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(fontSize: 18, color: scheme.onSurfaceVariant),
                 ),
               ),
               const SizedBox(height: 32),
-              Text(
-                'OTP',
-                style: TextStyle(fontSize: 18, color: scheme.tertiary),
-              ),
+              Text('OTP', style: TextStyle(fontSize: 18, color: scheme.tertiary)),
               const SizedBox(height: 8),
-              OtpCodeField(controller: _codeController, onCompleted: _verify),
+              OtpCodeField(
+                controller: _codeController,
+                onCompleted: _verify,
+              ),
               const SizedBox(height: 16),
               if (_secondsLeft > 0)
                 Center(
                   child: Text(
                     timerText,
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 18, color: scheme.onSurfaceVariant),
                   ),
                 ),
               TextButton(
@@ -195,9 +158,8 @@ class _OtpPageState extends State<OtpPage> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _isVerifying
-                    ? null
-                    : () => _verify(_codeController.text),
+                onPressed:
+                    _isVerifying ? null : () => _verify(_codeController.text),
                 child: _isVerifying
                     ? const SizedBox(
                         width: 24,
