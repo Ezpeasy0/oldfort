@@ -18,7 +18,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  int _selectedTab = 0; // 0 = ลงชื่อเข้าใช้, 1 = ลงทะเบียน
+  int _selectedTab = 0; // 0 = log in, 1 = register
   final _phoneController = TextEditingController();
   bool _isLoading = false;
 
