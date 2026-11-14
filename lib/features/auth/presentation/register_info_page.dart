@@ -1,4 +1,3 @@
-// lib/features/auth/presentation/register_info_page.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -7,9 +6,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/widgets/app_widgets.dart';
 
 class RegisterInfoPage extends StatefulWidget {
-  const RegisterInfoPage({super.key, required this.phoneNumber});
-
-  final String phoneNumber;
+  const RegisterInfoPage({super.key});
 
   @override
   State<RegisterInfoPage> createState() => _RegisterInfoPageState();
@@ -41,13 +38,10 @@ class _RegisterInfoPageState extends State<RegisterInfoPage> {
 
     context.push(
       AppRoutes.pdpa,
-      extra: PdpaRouteArgs(
-        draft: RegisterDraft(
-          firstName: firstName,
-          lastName: lastName,
-          nickname: nickname,
-        ),
-        phoneNumber: widget.phoneNumber,
+      extra: RegisterDraft(
+        firstName: firstName,
+        lastName: lastName,
+        nickname: nickname,
       ),
     );
   }
@@ -61,6 +55,7 @@ class _RegisterInfoPageState extends State<RegisterInfoPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
               BackTextButton(onTap: () => FirebaseAuth.instance.signOut()),
               const SizedBox(height: 30),
               const PageTitle('กรอกชื่อ นามสกุล\nและชื่อเล่น'),

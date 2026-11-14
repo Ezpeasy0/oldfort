@@ -1,38 +1,15 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
-
 class PhoneUtils {
-  // แปลงเบอร์เป็น E.164 (เช่น 0812345678 -> +66812345678)
-  static String toE164(String phone) {
-    String cleaned = phone.trim().replaceAll(RegExp(r'\D'), '');
-    if (cleaned.startsWith('0')) {
-      cleaned = '66${cleaned.substring(1)}';
-    }
-    if (!cleaned.startsWith('+')) {
-      cleaned = '+$cleaned';
-    }
-    return cleaned;
-  }
+  PhoneUtils._();
 
-  static String hashPhoneNumber(String formattedPhone) {
-    final bytes = utf8.encode(formattedPhone);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
+  static final RegExp _thaiMobile = RegExp(r'^0[689]\d{8}$');
 
-  static bool isValidThaiMobile(String phone) {
-    String cleaned = phone.trim().replaceAll(RegExp(r'\D'), '');
-    return RegExp(r'^0[689]\d{8}$').hasMatch(cleaned);
-  }
+  static String digitsOnly(String input) => input.replaceAll(RegExp(r'\D'), '');
 
-  static String toLocal(String phone) {
-    String cleaned = phone.trim().replaceAll(RegExp(r'\D'), '');
-    if (cleaned.startsWith('66') && cleaned.length == 11) {
-      cleaned = '0${cleaned.substring(2)}';
-    } else if (cleaned.startsWith('0') && cleaned.length == 10) {
-      return cleaned;
-    }
-    return cleaned;
-  }
+  static bool isValidThaiMobile(String input) =>
+      _thaiMobile.hasMatch(digitsOnly(input));
+
+  static String toE164(String input) => '+66${digitsOnly(input).substring(1)}';
+
+  static String toLocal(String e164) =>
+      e164.startsWith('+66') ? '0${e164.substring(3)}' : e164;
 }
