@@ -19,6 +19,8 @@ import '../../features/settings/presentation/profile_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../session/session_controller.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 class AppRoutes {
   AppRoutes._();
 
@@ -73,6 +75,13 @@ class RegisterDraft {
   final String nickname;
 }
 
+class PdpaRouteArgs {
+  final RegisterDraft draft;
+  final String phoneNumber;
+
+  PdpaRouteArgs({required this.draft, required this.phoneNumber});
+}
+
 const _authFlow = {AppRoutes.login, AppRoutes.otp};
 const _onboarding = {AppRoutes.registerInfo, AppRoutes.pdpa};
 
@@ -84,6 +93,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: session,
     redirect: (context, state) {
       final location = state.matchedLocation;
+      if (location == AppRoutes.otp) {
+        return null;
+      }
       return switch (session.status) {
         SessionStatus.loading || SessionStatus.error =>
           location == AppRoutes.splash ? null : AppRoutes.splash,
@@ -91,6 +103,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           _authFlow.contains(location) ? null : AppRoutes.login,
         SessionStatus.needsProfile =>
           _onboarding.contains(location) ? null : AppRoutes.registerInfo,
+
         SessionStatus.ready =>
           (location == AppRoutes.splash ||
                   _authFlow.contains(location) ||
@@ -118,14 +131,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.registerInfo,
-        builder: (context, state) => const RegisterInfoPage(),
+        builder: (context, state) {
+          final extraPhone = state.extra as String?;
+          final currentUserPhone =
+              FirebaseAuth.instance.currentUser?.phoneNumber ?? '';
+          final phoneNumber = extraPhone?.isNotEmpty == true
+              ? extraPhone!
+              : currentUserPhone;
+
+          return RegisterInfoPage(phoneNumber: phoneNumber);
+        },
       ),
       GoRoute(
         path: AppRoutes.pdpa,
         builder: (context, state) {
-          final draft = state.extra as RegisterDraft?;
-          if (draft == null) return const RegisterInfoPage();
-          return PdpaPage(draft: draft);
+          final args = state.extra as PdpaRouteArgs?;
+          final currentUserPhone =
+              FirebaseAuth.instance.currentUser?.phoneNumber ?? '';
+          if (args == null) {
+            return RegisterInfoPage(phoneNumber: currentUserPhone);
+          }
+          final phoneNumber = args.phoneNumber.isNotEmpty
+              ? args.phoneNumber
+              : currentUserPhone;
+
+          return PdpaPage(draft: args.draft, phoneNumber: phoneNumber);
         },
       ),
       GoRoute(

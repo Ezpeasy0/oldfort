@@ -14,9 +14,10 @@ class UserRepository {
   DocumentReference<Map<String, dynamic>> _doc(String uid) =>
       _db.collection('users').doc(uid);
 
-  Stream<AppUser?> watchUser(String uid) => _doc(uid)
-      .snapshots()
-      .map((snap) => snap.exists ? AppUser.fromDoc(snap) : null);
+  Stream<AppUser?> watchUser(String uid) =>
+      _doc(uid)
+          .snapshots()
+          .map((snap) => snap.exists ? AppUser.fromDoc(snap) : null);
 
   Future<void> createProfile({
     required User user,
@@ -53,10 +54,9 @@ class UserRepository {
   }
 
   Future<void> updatePhone(String uid, String phoneE164) {
-    return _doc(uid).update({
-      'phone': phoneE164,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    return _doc(
+      uid,
+    ).update({'phone': phoneE164, 'updatedAt': FieldValue.serverTimestamp()});
   }
 }
 

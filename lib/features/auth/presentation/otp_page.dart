@@ -1,7 +1,6 @@
 // lib/features/auth/presentation/otp_page.dart
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -111,27 +110,22 @@ class _OtpPageState extends State<OtpPage> {
       );
       final user = userCredential.user;
 
+      if (user == null) return;
       if (!mounted) return;
 
+      // 💡 แยกเส้นทางตามโหมดที่ส่งมาจากหน้า Login โดยตรง ไม่ต้องเช็กซ้ำซ้อน
       if (widget.args.isRegister) {
-        context.go(AppRoutes.registerInfo);
+        final draft = RegisterDraft(firstName: '', lastName: '', nickname: '');
+
+        context.go(
+          AppRoutes.pdpa,
+          extra: PdpaRouteArgs(
+            draft: draft,
+            phoneNumber: widget.args.phoneNumber,
+          ),
+        );
       } else {
-        if (user != null) {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-
-          if (!mounted) return;
-
-          if (userDoc.exists) {
-            context.go(AppRoutes.home);
-          } else {
-            context.go(AppRoutes.registerInfo);
-          }
-        } else {
-          context.go(AppRoutes.home);
-        }
+        context.go(AppRoutes.home);
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -139,6 +133,7 @@ class _OtpPageState extends State<OtpPage> {
       showAppSnack(context, authErrorText(e), isError: true);
     } catch (e) {
       if (!mounted) return;
+      debugPrint('SIGN IN ERROR: $e');
       showAppSnack(context, 'เกิดข้อผิดพลาด: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isVerifying = false);

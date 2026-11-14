@@ -1,23 +1,24 @@
 // lib/features/auth/presentation/login_page.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/auth_error_text.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../user/data/phone_repository.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   int _selectedTab = 0; // 0 = ลงชื่อเข้าใช้, 1 = ลงทะเบียน
   final _phoneController = TextEditingController();
   bool _isLoading = false;
@@ -44,39 +45,31 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final formattedPhone = PhoneUtils.toE164(phone);
+      final bool isRegisterMode = _selectedTab == 1;
 
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('phone', isEqualTo: formattedPhone)
-          .limit(1)
-          .get();
+      final phoneRepo = ref.read(phoneRepositoryProvider);
+      final bool isAlreadyRegistered = await phoneRepo.checkPhoneExists(phone);
 
-      final userExists = querySnapshot.docs.isNotEmpty;
+      if (isRegisterMode && isAlreadyRegistered) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        showAppSnack(
+          context,
+          'เบอร์นี้มีบัญชีในระบบแล้ว กรุณาไปที่แท็บ "ลงชื่อเข้าใช้"',
+          isError: true,
+        );
+        return;
+      }
 
-      if (_selectedTab == 0) {
-        if (!userExists) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            showAppSnack(
-              context,
-              'โปรดสมัครบัญชีก่อนเพื่อเข้าสู่ระบบ',
-              isError: true,
-            );
-          }
-          return;
-        }
-      } else {
-        if (userExists) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            showAppSnack(
-              context,
-              'เบอร์นี้มีบัญชีในระบบแล้ว กรุณาเปลี่ยนไปที่แท็บ "ลงชื่อเข้าใช้"',
-              isError: true,
-            );
-          }
-          return;
-        }
+      if (!isRegisterMode && !isAlreadyRegistered) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        showAppSnack(
+          context,
+          'ยังไม่มีบัญชีในระบบ กรุณาสมัครสมาชิกก่อน',
+          isError: true,
+        );
+        return;
       }
 
       await FirebaseAuth.instance.verifyPhoneNumber(
@@ -85,10 +78,15 @@ class _LoginPageState extends State<LoginPage> {
         verificationCompleted: (PhoneAuthCredential credential) async {
           try {
             await FirebaseAuth.instance.signInWithCredential(credential);
+            if (mounted) {
+              setState(() => _isLoading = false);
+              context.go(AppRoutes.home);
+            }
           } on FirebaseAuthException catch (e) {
-            if (mounted) showAppSnack(context, authErrorText(e), isError: true);
-          } finally {
-            if (mounted) setState(() => _isLoading = false);
+            if (mounted) {
+              setState(() => _isLoading = false);
+              showAppSnack(context, authErrorText(e), isError: true);
+            }
           }
         },
         verificationFailed: (FirebaseAuthException e) {
@@ -105,7 +103,7 @@ class _LoginPageState extends State<LoginPage> {
               phoneNumber: phone,
               verificationId: verificationId,
               resendToken: resendToken,
-              isRegister: _selectedTab == 1,
+              isRegister: isRegisterMode,
             ),
           );
         },
