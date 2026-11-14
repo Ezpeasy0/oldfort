@@ -1,15 +1,21 @@
+// lib/features/auth/presentation/pdpa_page.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/router/app_router.dart';
+
+import 'package:go_router/go_router.dart';
+
 import '../../../core/widgets/app_widgets.dart';
 import '../../user/data/user_repository.dart';
+import '../../user/data/phone_repository.dart';
 
 class PdpaPage extends ConsumerStatefulWidget {
-  const PdpaPage({super.key, required this.draft});
+  const PdpaPage({super.key, required this.draft, required this.phoneNumber});
 
   final RegisterDraft draft;
+  final String phoneNumber;
 
   @override
   ConsumerState<PdpaPage> createState() => _PdpaPageState();
@@ -22,19 +28,40 @@ class _PdpaPageState extends ConsumerState<PdpaPage> {
   Future<void> _accept() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    final userRepo = ref.read(userRepositoryProvider);
+    final phoneRepo = ref.read(phoneRepositoryProvider);
+
     setState(() => _isSaving = true);
     try {
-      await ref.read(userRepositoryProvider).createProfile(
-            user: user,
-            firstName: widget.draft.firstName,
-            lastName: widget.draft.lastName,
-            nickname: widget.draft.nickname,
-          );
+      await userRepo.createProfile(
+        user: user,
+        firstName: widget.draft.firstName,
+        lastName: widget.draft.lastName,
+        nickname: widget.draft.nickname,
+      );
 
+      final phoneToSave = widget.phoneNumber;
+
+      if (phoneToSave.isNotEmpty) {
+        await phoneRepo.createPhoneRecord(
+          phoneNumber: phoneToSave,
+          uid: user.uid,
+        );
+      }
+
+      if (!mounted) return;
+      context.go(AppRoutes.home);
     } on FirebaseException catch (e) {
       if (!mounted) return;
-      showAppSnack(context, 'บันทึกข้อมูลไม่สำเร็จ (${e.code}) กรุณาลองใหม่',
-          isError: true);
+      showAppSnack(
+        context,
+        'บันทึกข้อมูลไม่สำเร็จ (${e.code}) กรุณาลองใหม่',
+        isError: true,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnack(context, 'เกิดข้อผิดพลาด: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -64,6 +91,8 @@ class _PdpaPageState extends ConsumerState<PdpaPage> {
     );
     if (confirmed == true) {
       await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      context.go(AppRoutes.login);
     }
   }
 
@@ -78,7 +107,13 @@ class _PdpaPageState extends ConsumerState<PdpaPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const BackTextButton(),
+              BackTextButton(
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (!mounted) return;
+                  this.context.go(AppRoutes.login);
+                },
+              ),
               const SizedBox(height: 8),
               const PageTitle('ความยินยอม\nข้อมูลส่วนบุคคล'),
               const SizedBox(height: 16),
@@ -108,7 +143,10 @@ class _PdpaPageState extends ConsumerState<PdpaPage> {
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Text(
                                 '•  $line',
-                                style: const TextStyle(fontSize: 18, height: 1.4),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  height: 1.4,
+                                ),
                               ),
                             ),
                           const SizedBox(height: 16),
@@ -179,7 +217,7 @@ const _pdpaSections = [
     'ผู้ดูแลระบบไม่สามารถดูข้อมูลสุขภาพของคุณได้',
   ]),
   _PdpaSection('เก็บข้อมูลไว้ที่ไหน', [
-    'ข้อมูลเก็บบนบริการ Google Firebase และส่งผ่านการเชื่อมต่อที่เข้ารหัส',
+    'ข้อมูลเก็บบบนบริการ Google Firebase และส่งผ่านการเชื่อมต่อที่เข้ารหัส',
   ]),
   _PdpaSection('สิทธิของคุณ', [
     'ขอดู แก้ไข หรือขอลบข้อมูลของคุณได้',
