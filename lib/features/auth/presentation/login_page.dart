@@ -1,4 +1,4 @@
-// lib/features/auth/presentation/login_page.dart
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,7 +17,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-
   int _selectedTab = 0;
   final _phoneController = TextEditingController();
   bool _isLoading = false;
@@ -38,14 +37,62 @@ class _LoginPageState extends State<LoginPage> {
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
 
+    final e164 = PhoneUtils.toE164(phone);
+    var registered = false;
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'asia-southeast1')
+          .httpsCallable('checkPhone')
+          .call({'phone': e164});
+      final data = result.data as Map;
+      registered = data['registered'] == true;
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      showAppSnack(
+        context,
+        e.code == 'resource-exhausted'
+            ? 'ลองหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่'
+            : 'ตรวจสอบเบอร์ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+        isError: true,
+      );
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      showAppSnack(
+        context,
+        'ตรวจสอบเบอร์ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+        isError: true,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final isRegisterTab = _selectedTab == 1;
+    if (!isRegisterTab && !registered) {
+      setState(() {
+        _isLoading = false;
+        _selectedTab = 1;
+      });
+      showAppSnack(context, 'เบอร์นี้ยังไม่ได้สมัคร กรุณาลงทะเบียนก่อน', isError: true);
+      return;
+    }
+    if (isRegisterTab && registered) {
+      setState(() {
+        _isLoading = false;
+        _selectedTab = 0;
+      });
+      showAppSnack(context, 'เบอร์นี้มีบัญชีแล้ว กรุณาลงชื่อเข้าใช้', isError: true);
+      return;
+    }
+
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: PhoneUtils.toE164(phone),
+      phoneNumber: e164,
       timeout: const Duration(seconds: 30),
 
       verificationCompleted: (PhoneAuthCredential credential) async {
         try {
           await FirebaseAuth.instance.signInWithCredential(credential);
-
         } on FirebaseAuthException catch (e) {
           if (mounted) showAppSnack(context, authErrorText(e), isError: true);
         } finally {
