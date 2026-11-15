@@ -40,12 +40,13 @@ class _LoginPageState extends State<LoginPage> {
     final e164 = PhoneUtils.toE164(phone);
     var registered = false;
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'asia-southeast1')
-          .httpsCallable('checkPhone')
+      final result = await FirebaseFunctions.instance
+          .httpsCallableFromUrl('https://checkphone-seuelxgtgq-as.a.run.app')
           .call({'phone': e164});
       final data = result.data as Map;
       registered = data['registered'] == true;
     } on FirebaseFunctionsException catch (e) {
+      debugPrint('checkPhone error: ${e.code} | ${e.message} | ${e.details}');
       if (!mounted) return;
       setState(() => _isLoading = false);
       showAppSnack(
@@ -56,7 +57,8 @@ class _LoginPageState extends State<LoginPage> {
         isError: true,
       );
       return;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('checkPhone other error: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
       showAppSnack(
