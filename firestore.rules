@@ -38,6 +38,23 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    function validTextMessage() {
+      return request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt'])
+        && validText(request.resource.data.text, 1000);
+    }
+
+    function validImageMessage(chatId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['senderId', 'type', 'mediaPath', 'mediaUrl', 'width', 'height', 'createdAt'])
+        && d.type == 'image'
+        && d.mediaPath is string
+        && d.mediaPath.matches('chats/' + chatId + '/' + request.auth.uid + '/[^/]+')
+        && d.mediaUrl is string
+        && d.mediaUrl.size() <= 2048
+        && d.width is int && d.width > 0
+        && d.height is int && d.height > 0;
+    }
+
     function onlyMyReadChanged() {
       return request.resource.data.get('lastReadAt', {})
         .diff(resource.data.get('lastReadAt', {}))
@@ -188,10 +205,13 @@ service cloud.firestore {
             && request.resource.data.lastMessage.size() <= 101)
           || (resource.data.type == 'group'
             && resource.data.ownerId == request.auth.uid
-            && onlyChanged(['name', 'memberIds'])
+            && onlyChanged(['name', 'memberIds', 'photoUrl'])
             && request.auth.uid in request.resource.data.memberIds
             && request.resource.data.memberIds.size() <= 50
-            && validText(request.resource.data.name, 50))
+            && validText(request.resource.data.name, 50)
+            && (!('photoUrl' in request.resource.data)
+              || (request.resource.data.photoUrl is string
+                && request.resource.data.photoUrl.size() <= 2048)))
           || (resource.data.type == 'group'
             && resource.data.ownerId != request.auth.uid
             && onlyChanged(['memberIds'])
@@ -213,9 +233,8 @@ service cloud.firestore {
           && (isCommunityChat(chatId) || request.auth.uid in chatDoc().memberIds);
 
         allow create: if signedIn()
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
-          && validText(request.resource.data.text, 1000)
+          && (validTextMessage() || validImageMessage(chatId))
           && request.resource.data.createdAt == request.time
           && (
             isCommunityChat(chatId)

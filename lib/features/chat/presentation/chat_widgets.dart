@@ -91,9 +91,23 @@ class MessageBubble extends ConsumerWidget {
         ? (isDark ? const Color(0xFF2F5D45) : const Color(0xFFDDF6CC))
         : scheme.surfaceContainerHighest;
 
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final content = message.isImage
+        ? _ChatImage(message: message, width: screenWidth * 0.6)
+        : Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: 1,
+            child: Text(
+              message.text,
+              style: TextStyle(fontSize: 20, color: scheme.onSurface),
+            ),
+          );
+
     final bubble = Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.7),
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+      constraints: BoxConstraints(maxWidth: screenWidth * 0.7),
+      padding: message.isImage
+          ? const EdgeInsets.fromLTRB(6, 6, 10, 6)
+          : const EdgeInsets.fromLTRB(14, 10, 14, 6),
       decoration: BoxDecoration(
         color: bubbleColor,
         borderRadius: BorderRadius.circular(14),
@@ -101,14 +115,7 @@ class MessageBubble extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            widthFactor: 1,
-            child: Text(
-              message.text,
-              style: TextStyle(fontSize: 20, color: scheme.onSurface),
-            ),
-          ),
+          content,
           const SizedBox(height: 2),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -206,6 +213,96 @@ class _ReadStatus extends StatelessWidget {
           Text('อ่านแล้ว $readers', style: const TextStyle(fontSize: 13, color: blue)),
         ],
       ],
+    );
+  }
+}
+
+class _ChatImage extends StatelessWidget {
+  const _ChatImage({required this.message, required this.width});
+
+  final ChatMessage message;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final w = message.width ?? 4;
+    final h = message.height ?? 3;
+    final ratio = (w / h).clamp(0.6, 1.8);
+    final url = message.mediaUrl!;
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => ImageViewerPage(url: url)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: width,
+          child: AspectRatio(
+            aspectRatio: ratio,
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) => progress == null
+                  ? child
+                  : ColoredBox(
+                      color: scheme.surfaceContainerHigh,
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+              errorBuilder: (context, error, stackTrace) => ColoredBox(
+                color: scheme.surfaceContainerHigh,
+                child: Icon(Icons.broken_image_outlined,
+                    size: 48, color: scheme.onSurfaceVariant),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ImageViewerPage extends StatelessWidget {
+  const ImageViewerPage({super.key, required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: Center(
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, progress) => progress == null
+                        ? child
+                        : const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: IconButton.filled(
+                style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                iconSize: 32,
+                tooltip: 'ปิด',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

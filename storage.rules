@@ -1,0 +1,44 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCommunityChat(chatId) {
+      return chatId in ['community_cooking', 'community_dharma', 'community_pets'];
+    }
+
+    function chatData(chatId) {
+      return firestore.get(/databases/(default)/documents/chats/$(chatId)).data;
+    }
+
+    function isMember(chatId) {
+      return isCommunityChat(chatId) || request.auth.uid in chatData(chatId).memberIds;
+    }
+
+    function isImageUnder(maxMb) {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    match /chats/{chatId}/{uid}/{fileName} {
+      allow read: if signedIn() && isMember(chatId);
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && isMember(chatId)
+        && isImageUnder(10);
+      allow update, delete: if false;
+    }
+
+    match /groups/{chatId}/{fileName} {
+      allow read: if signedIn() && isMember(chatId);
+      allow create: if signedIn()
+        && chatData(chatId).ownerId == request.auth.uid
+        && isImageUnder(5);
+      allow update, delete: if false;
+    }
+  }
+}

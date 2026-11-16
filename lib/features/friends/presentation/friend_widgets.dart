@@ -5,23 +5,40 @@ import '../../../core/theme/app_theme.dart';
 import '../data/friend_repository.dart';
 
 class ProfileAvatar extends StatelessWidget {
-  const ProfileAvatar({super.key, this.size = 56, this.icon = Icons.person_rounded});
+  const ProfileAvatar({
+    super.key,
+    this.size = 56,
+    this.icon = Icons.person_rounded,
+    this.imageUrl,
+  });
 
   final double size;
   final IconData icon;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final fallback = Icon(icon, size: size * 0.65, color: scheme.tertiary);
+    final url = imageUrl;
     return Container(
       width: size,
       height: size,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: scheme.surface,
         shape: BoxShape.circle,
         border: Border.all(color: scheme.tertiary),
       ),
-      child: Icon(icon, size: size * 0.65, color: scheme.tertiary),
+      child: url == null
+          ? fallback
+          : Image.network(
+              url,
+              fit: BoxFit.cover,
+              width: size,
+              height: size,
+              errorBuilder: (context, error, stackTrace) => fallback,
+            ),
     );
   }
 }

@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../friends/data/friend_repository.dart';
@@ -46,11 +49,13 @@ class ChatRoom {
     required this.lastSenderId,
     required this.createdAt,
     required this.lastReadAt,
+    this.photoUrl,
   });
 
   final String id;
   final ChatType type;
   final String name;
+  final String? photoUrl;
   final String? ownerId;
   final List<String> memberIds;
   final String? lastMessage;
@@ -80,6 +85,7 @@ class ChatRoom {
       lastSenderId: data['lastSenderId'] as String?,
       createdAt: _toDate(data['createdAt']),
       lastReadAt: reads,
+      photoUrl: data['photoUrl'] as String?,
     );
   }
 
@@ -113,6 +119,10 @@ class ChatMessage {
     required this.text,
     required this.createdAt,
     required this.pending,
+    this.type = 'text',
+    this.mediaUrl,
+    this.width,
+    this.height,
   });
 
   final String id;
@@ -120,6 +130,12 @@ class ChatMessage {
   final String text;
   final DateTime? createdAt;
   final bool pending;
+  final String type;
+  final String? mediaUrl;
+  final int? width;
+  final int? height;
+
+  bool get isImage => type == 'image' && mediaUrl != null;
 
   factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
@@ -129,14 +145,39 @@ class ChatMessage {
       text: data['text'] as String? ?? '',
       createdAt: _toDate(data['createdAt']),
       pending: doc.metadata.hasPendingWrites,
+      type: data['type'] as String? ?? 'text',
+      mediaUrl: data['mediaUrl'] as String?,
+      width: (data['width'] as num?)?.toInt(),
+      height: (data['height'] as num?)?.toInt(),
     );
   }
 }
 
+class PickedImage {
+  const PickedImage({
+    required this.bytes,
+    required this.contentType,
+    required this.width,
+    required this.height,
+  });
+
+  final Uint8List bytes;
+  final String contentType;
+  final int width;
+  final int height;
+
+  String get extension => switch (contentType) {
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        _ => 'jpg',
+      };
+}
+
 class ChatRepository {
-  ChatRepository(this._db);
+  ChatRepository(this._db, this._storage);
 
   final FirebaseFirestore _db;
+  final FirebaseStorage _storage;
 
   static const maxMessageLength = 1000;
   static const maxGroupMembers = 50;
@@ -198,15 +239,63 @@ class ChatRepository {
   }
 
   Future<void> sendMessage(String chatId, String myUid, String text) {
+    return _writeMessage(
+      chatId,
+      myUid,
+      _chat(chatId).collection('messages').doc(),
+      {'text': text},
+      text.length > 100 ? '${text.substring(0, 100)}…' : text,
+    );
+  }
+
+  Future<void> sendImage(String chatId, String myUid, PickedImage image) async {
+    final messageRef = _chat(chatId).collection('messages').doc();
+    final path = 'chats/$chatId/$myUid/${messageRef.id}.${image.extension}';
+    final url = await _upload(path, image);
+    await _writeMessage(
+      chatId,
+      myUid,
+      messageRef,
+      {
+        'type': 'image',
+        'mediaPath': path,
+        'mediaUrl': url,
+        'width': image.width,
+        'height': image.height,
+      },
+      '📷 รูปภาพ',
+    );
+  }
+
+  Future<void> setGroupPhoto(String chatId, PickedImage image) async {
+    final path =
+        'groups/$chatId/${DateTime.now().millisecondsSinceEpoch}.${image.extension}';
+    final url = await _upload(path, image);
+    await _chat(chatId).update({'photoUrl': url});
+  }
+
+  Future<String> _upload(String path, PickedImage image) async {
+    final ref = _storage.ref(path);
+    await ref.putData(image.bytes, SettableMetadata(contentType: image.contentType));
+    return ref.getDownloadURL();
+  }
+
+  Future<void> _writeMessage(
+    String chatId,
+    String myUid,
+    DocumentReference<Map<String, dynamic>> messageRef,
+    Map<String, dynamic> content,
+    String preview,
+  ) {
     final batch = _db.batch();
-    batch.set(_chat(chatId).collection('messages').doc(), {
+    batch.set(messageRef, {
       'senderId': myUid,
-      'text': text,
+      ...content,
       'createdAt': FieldValue.serverTimestamp(),
     });
     if (chatTypeOf(chatId) != ChatType.community) {
       batch.update(_chat(chatId), {
-        'lastMessage': text.length > 100 ? '${text.substring(0, 100)}…' : text,
+        'lastMessage': preview,
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastSenderId': myUid,
         'lastReadAt.$myUid': FieldValue.serverTimestamp(),
@@ -242,7 +331,7 @@ class ChatRepository {
 }
 
 final chatRepositoryProvider = Provider<ChatRepository>(
-  (ref) => ChatRepository(FirebaseFirestore.instance),
+  (ref) => ChatRepository(FirebaseFirestore.instance, FirebaseStorage.instance),
 );
 
 final chatProvider = StreamProvider.autoDispose.family<ChatRoom?, String>(

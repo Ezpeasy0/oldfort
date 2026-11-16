@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
@@ -10,6 +11,7 @@ import '../../friends/data/friend_repository.dart';
 import '../../friends/presentation/friend_widgets.dart';
 import '../data/chat_repository.dart';
 import 'chat_widgets.dart';
+import 'image_picking.dart';
 
 class ChatRoomPage extends ConsumerStatefulWidget {
   const ChatRoomPage({super.key, required this.chatId});
@@ -23,6 +25,7 @@ class ChatRoomPage extends ConsumerStatefulWidget {
 class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
   final _textController = TextEditingController();
   bool _sending = false;
+  bool _uploading = false;
   DateTime? _markedUpTo;
   List<ChatMessage>? _latestMessages;
   late final AppLifecycleListener _lifecycle;
@@ -92,7 +95,38 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
     }
   }
 
-  void _comingSoon() => showAppSnack(context, 'ส่งรูปภาพได้เร็ว ๆ นี้');
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    final myUid = ref.read(myUidProvider);
+    if (myUid == null || _uploading) return;
+    PickedImage? image;
+    try {
+      image = await pickChatImage(source);
+    } catch (_) {
+      if (mounted) showAppSnack(context, 'เปิดรูปภาพไม่สำเร็จ', isError: true);
+      return;
+    }
+    if (image == null || !mounted) return;
+
+    setState(() => _uploading = true);
+    try {
+      await ref.read(chatRepositoryProvider).sendImage(widget.chatId, myUid, image);
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final message = e.code == 'permission-denied' || e.code == 'unauthorized'
+          ? (_type == ChatType.private
+              ? 'ส่งไม่ได้ เพราะไม่ได้เป็นเพื่อนกันแล้ว'
+              : 'ส่งไม่ได้ คุณอาจไม่ได้อยู่ในกลุ่มนี้แล้ว')
+          : 'ส่งรูปภาพไม่สำเร็จ (${e.code})';
+      showAppSnack(context, message, isError: true);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _openAttachMenu() async {
+    final source = await askImageSource(context);
+    if (source != null) await _pickAndSendImage(source);
+  }
 
   Future<void> _confirmLeave(String myUid) async {
     final confirmed = await showDialog<bool>(
@@ -205,7 +239,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
 
   Widget _buildInputBar(ColorScheme scheme) {
     final hasText = _textController.text.trim().isNotEmpty;
-    return Padding(
+    final inputBar = Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
       child: Row(
         children: [
@@ -213,7 +247,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
             tooltip: 'แนบไฟล์',
             iconSize: 30,
             color: const Color(0xFF2E86DE),
-            onPressed: _comingSoon,
+            onPressed: _uploading ? null : _openAttachMenu,
             icon: const Icon(Icons.add),
           ),
           Expanded(
@@ -249,11 +283,26 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                   tooltip: 'ถ่ายรูป',
                   iconSize: 30,
                   color: const Color(0xFF2E86DE),
-                  onPressed: _comingSoon,
+                  onPressed: _uploading
+                      ? null
+                      : () => _pickAndSendImage(ImageSource.camera),
                   icon: const Icon(Icons.photo_camera_outlined),
                 ),
         ],
       ),
+    );
+    if (!_uploading) return inputBar;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const LinearProgressIndicator(),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('กำลังส่งรูปภาพ...',
+              style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
+        ),
+        inputBar,
+      ],
     );
   }
 }
@@ -330,7 +379,11 @@ class _RoomHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       children: [
-                        ProfileAvatar(size: 40, icon: icon),
+                        ProfileAvatar(
+                          size: 40,
+                          icon: icon,
+                          imageUrl: type == ChatType.group ? chat?.photoUrl : null,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(

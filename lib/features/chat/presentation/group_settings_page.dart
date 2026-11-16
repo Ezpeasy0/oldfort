@@ -2,12 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../friends/data/friend_repository.dart';
 import '../../friends/presentation/friend_widgets.dart';
 import '../data/chat_repository.dart';
+import 'image_picking.dart';
 import 'private_chats_page.dart';
 
 class GroupSettingsPage extends ConsumerStatefulWidget {
@@ -75,6 +77,19 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
     }
     FocusScope.of(context).unfocus();
     await _run(() => _repo.renameGroup(widget.chatId, name), 'บันทึกชื่อกลุ่มแล้ว');
+  }
+
+  Future<void> _changePhoto() async {
+    PickedImage? image;
+    try {
+      image = await pickChatImage(ImageSource.gallery, maxSize: 800);
+    } catch (_) {
+      if (mounted) showAppSnack(context, 'เปิดรูปภาพไม่สำเร็จ', isError: true);
+      return;
+    }
+    if (image == null || !mounted) return;
+    final picked = image;
+    await _run(() => _repo.setGroupPhoto(widget.chatId, picked), 'เปลี่ยนรูปกลุ่มแล้ว');
   }
 
   Future<void> _removeMember(String uid) async {
@@ -157,11 +172,23 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
           const BackTextButton(),
           const PageTitle('แก้ไขกลุ่ม'),
           const SizedBox(height: 16),
-          const Center(child: ProfileAvatar(size: 120, icon: Icons.groups_rounded)),
+          Center(
+            child: GestureDetector(
+              onTap: _busy ? null : _changePhoto,
+              child: ProfileAvatar(
+                size: 120,
+                icon: Icons.groups_rounded,
+                imageUrl: chat.photoUrl,
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           Center(
-            child: Text('รูปกลุ่มจะเปลี่ยนได้ในเวอร์ชันถัดไป',
-                style: TextStyle(fontSize: 14, color: scheme.onSurfaceVariant)),
+            child: TextButton.icon(
+              onPressed: _busy ? null : _changePhoto,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('เปลี่ยนรูปกลุ่ม', style: TextStyle(fontSize: 18)),
+            ),
           ),
           const SizedBox(height: 24),
           LabeledField(
