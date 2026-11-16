@@ -45,6 +45,10 @@ dependencies:
   firebase_messaging: ^17.0.1
   firebase_storage: ^14.0.1
   image_picker: ^1.2.4
+  record: ^7.2.0
+  just_audio: ^0.10.6
+  video_player: ^2.14.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

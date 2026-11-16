@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../friends/data/friend_repository.dart';
 import '../../friends/presentation/friend_widgets.dart';
 import '../data/chat_repository.dart';
+import 'chat_media.dart';
 
 class ImageCard extends StatelessWidget {
   const ImageCard({
@@ -92,9 +93,14 @@ class MessageBubble extends ConsumerWidget {
         : scheme.surfaceContainerHighest;
 
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final content = message.isImage
+    final isVisual = message.isImage || message.isVideo;
+    final Widget content = message.isImage
         ? _ChatImage(message: message, width: screenWidth * 0.6)
-        : Align(
+        : message.isVideo
+            ? VideoMessageContent(message: message, width: screenWidth * 0.6)
+            : message.isAudio
+                ? AudioMessageContent(key: ValueKey(message.id), message: message)
+                : Align(
             alignment: Alignment.centerLeft,
             widthFactor: 1,
             child: Text(
@@ -105,7 +111,7 @@ class MessageBubble extends ConsumerWidget {
 
     final bubble = Container(
       constraints: BoxConstraints(maxWidth: screenWidth * 0.7),
-      padding: message.isImage
+      padding: isVisual
           ? const EdgeInsets.fromLTRB(6, 6, 10, 6)
           : const EdgeInsets.fromLTRB(14, 10, 14, 6),
       decoration: BoxDecoration(

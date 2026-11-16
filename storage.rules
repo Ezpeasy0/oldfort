@@ -19,6 +19,11 @@ service firebase.storage {
       return isCommunityChat(chatId) || request.auth.uid in chatData(chatId).memberIds;
     }
 
+    function isTypeUnder(type, maxMb) {
+      return request.resource.contentType.matches(type + '/.*')
+        && request.resource.size < maxMb * 1024 * 1024;
+    }
+
     function isImageUnder(maxMb) {
       return request.resource.contentType.matches('image/.*')
         && request.resource.size < maxMb * 1024 * 1024;
@@ -29,7 +34,7 @@ service firebase.storage {
       allow create: if signedIn()
         && request.auth.uid == uid
         && isMember(chatId)
-        && isImageUnder(10);
+        && (isTypeUnder('image', 10) || isTypeUnder('audio', 10) || isTypeUnder('video', 100));
       allow update, delete: if false;
     }
 

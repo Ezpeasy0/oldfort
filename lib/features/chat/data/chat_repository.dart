@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -123,6 +124,7 @@ class ChatMessage {
     this.mediaUrl,
     this.width,
     this.height,
+    this.durationMs,
   });
 
   final String id;
@@ -134,8 +136,11 @@ class ChatMessage {
   final String? mediaUrl;
   final int? width;
   final int? height;
+  final int? durationMs;
 
   bool get isImage => type == 'image' && mediaUrl != null;
+  bool get isAudio => type == 'audio' && mediaUrl != null;
+  bool get isVideo => type == 'video' && mediaUrl != null;
 
   factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
@@ -149,6 +154,7 @@ class ChatMessage {
       mediaUrl: data['mediaUrl'] as String?,
       width: (data['width'] as num?)?.toInt(),
       height: (data['height'] as num?)?.toInt(),
+      durationMs: (data['durationMs'] as num?)?.toInt(),
     );
   }
 }
@@ -181,6 +187,9 @@ class ChatRepository {
 
   static const maxMessageLength = 1000;
   static const maxGroupMembers = 50;
+  static const maxVoiceDuration = Duration(minutes: 2);
+  static const maxVideoDuration = Duration(seconds: 60);
+  static const maxVideoBytes = 100 * 1024 * 1024;
 
   CollectionReference<Map<String, dynamic>> get _chats => _db.collection('chats');
 
@@ -267,6 +276,56 @@ class ChatRepository {
     );
   }
 
+  Future<void> sendAudio(
+    String chatId,
+    String myUid,
+    String filePath,
+    int durationMs,
+  ) async {
+    final messageRef = _chat(chatId).collection('messages').doc();
+    final path = 'chats/$chatId/$myUid/${messageRef.id}.m4a';
+    final url = await _uploadFile(path, filePath, 'audio/mp4');
+    await _writeMessage(
+      chatId,
+      myUid,
+      messageRef,
+      {
+        'type': 'audio',
+        'mediaPath': path,
+        'mediaUrl': url,
+        'durationMs': durationMs,
+      },
+      '🎤 ข้อความเสียง',
+    );
+  }
+
+  Future<void> sendVideo(
+    String chatId,
+    String myUid, {
+    required String filePath,
+    required int width,
+    required int height,
+    required int durationMs,
+  }) async {
+    final messageRef = _chat(chatId).collection('messages').doc();
+    final path = 'chats/$chatId/$myUid/${messageRef.id}.mp4';
+    final url = await _uploadFile(path, filePath, 'video/mp4');
+    await _writeMessage(
+      chatId,
+      myUid,
+      messageRef,
+      {
+        'type': 'video',
+        'mediaPath': path,
+        'mediaUrl': url,
+        'width': width,
+        'height': height,
+        'durationMs': durationMs,
+      },
+      '🎬 วิดีโอ',
+    );
+  }
+
   Future<void> setGroupPhoto(String chatId, PickedImage image) async {
     final path =
         'groups/$chatId/${DateTime.now().millisecondsSinceEpoch}.${image.extension}';
@@ -277,6 +336,12 @@ class ChatRepository {
   Future<String> _upload(String path, PickedImage image) async {
     final ref = _storage.ref(path);
     await ref.putData(image.bytes, SettableMetadata(contentType: image.contentType));
+    return ref.getDownloadURL();
+  }
+
+  Future<String> _uploadFile(String path, String filePath, String contentType) async {
+    final ref = _storage.ref(path);
+    await ref.putFile(File(filePath), SettableMetadata(contentType: contentType));
     return ref.getDownloadURL();
   }
 

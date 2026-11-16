@@ -61,6 +61,8 @@ const STALE_TOKEN_ERRORS = new Set([
 
 function previewOf(message) {
   if (message.type === 'image') return 'ส่งรูปภาพ';
+  if (message.type === 'audio') return 'ส่งข้อความเสียง';
+  if (message.type === 'video') return 'ส่งวิดีโอ';
   const text = typeof message.text === 'string' ? message.text.trim() : '';
   if (!text) return 'ส่งข้อความใหม่';
   return text.length > 100 ? `${text.slice(0, 100)}…` : text;

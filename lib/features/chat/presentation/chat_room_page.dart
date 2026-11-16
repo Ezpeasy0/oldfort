@@ -10,6 +10,7 @@ import '../../../core/widgets/app_widgets.dart';
 import '../../friends/data/friend_repository.dart';
 import '../../friends/presentation/friend_widgets.dart';
 import '../data/chat_repository.dart';
+import 'chat_media.dart';
 import 'chat_widgets.dart';
 import 'image_picking.dart';
 
@@ -26,6 +27,8 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
   final _textController = TextEditingController();
   bool _sending = false;
   bool _uploading = false;
+  String _uploadLabel = '';
+  bool _recording = false;
   DateTime? _markedUpTo;
   List<ChatMessage>? _latestMessages;
   late final AppLifecycleListener _lifecycle;
@@ -107,16 +110,72 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
     }
     if (image == null || !mounted) return;
 
-    setState(() => _uploading = true);
+    final picked = image;
+    await _upload(
+      'กำลังส่งรูปภาพ...',
+      'ส่งรูปภาพไม่สำเร็จ',
+      () => ref.read(chatRepositoryProvider).sendImage(widget.chatId, myUid, picked),
+    );
+  }
+
+  Future<void> _pickAndSendVideo(ImageSource source) async {
+    final myUid = ref.read(myUidProvider);
+    if (myUid == null || _uploading) return;
+    PickedVideo? video;
     try {
-      await ref.read(chatRepositoryProvider).sendImage(widget.chatId, myUid, image);
+      video = await pickChatVideo(source);
+    } on VideoPickException catch (e) {
+      if (mounted) showAppSnack(context, e.message, isError: true);
+      return;
+    } catch (_) {
+      if (mounted) showAppSnack(context, 'เปิดวิดีโอไม่สำเร็จ', isError: true);
+      return;
+    }
+    if (video == null || !mounted) return;
+    final picked = video;
+    await _upload(
+      'กำลังส่งวิดีโอ...',
+      'ส่งวิดีโอไม่สำเร็จ',
+      () => ref.read(chatRepositoryProvider).sendVideo(
+            widget.chatId,
+            myUid,
+            filePath: picked.path,
+            width: picked.width,
+            height: picked.height,
+            durationMs: picked.durationMs,
+          ),
+    );
+  }
+
+  Future<void> _sendVoice(String path, int durationMs) async {
+    setState(() => _recording = false);
+    final myUid = ref.read(myUidProvider);
+    if (myUid == null) return;
+    await _upload(
+      'กำลังส่งข้อความเสียง...',
+      'ส่งข้อความเสียงไม่สำเร็จ',
+      () => ref.read(chatRepositoryProvider).sendAudio(widget.chatId, myUid, path, durationMs),
+    );
+  }
+
+  Future<void> _upload(
+    String label,
+    String failMessage,
+    Future<void> Function() action,
+  ) async {
+    setState(() {
+      _uploading = true;
+      _uploadLabel = label;
+    });
+    try {
+      await action();
     } on FirebaseException catch (e) {
       if (!mounted) return;
       final message = e.code == 'permission-denied' || e.code == 'unauthorized'
           ? (_type == ChatType.private
               ? 'ส่งไม่ได้ เพราะไม่ได้เป็นเพื่อนกันแล้ว'
               : 'ส่งไม่ได้ คุณอาจไม่ได้อยู่ในกลุ่มนี้แล้ว')
-          : 'ส่งรูปภาพไม่สำเร็จ (${e.code})';
+          : '$failMessage (${e.code})';
       showAppSnack(context, message, isError: true);
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -124,8 +183,19 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
   }
 
   Future<void> _openAttachMenu() async {
-    final source = await askImageSource(context);
-    if (source != null) await _pickAndSendImage(source);
+    final action = await askAttachAction(context);
+    switch (action) {
+      case AttachAction.galleryPhoto:
+        await _pickAndSendImage(ImageSource.gallery);
+      case AttachAction.cameraPhoto:
+        await _pickAndSendImage(ImageSource.camera);
+      case AttachAction.galleryVideo:
+        await _pickAndSendVideo(ImageSource.gallery);
+      case AttachAction.cameraVideo:
+        await _pickAndSendVideo(ImageSource.camera);
+      case null:
+        break;
+    }
   }
 
   Future<void> _confirmLeave(String myUid) async {
@@ -230,7 +300,17 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                       },
                     ),
             ),
-            if (!removedFromGroup) _buildInputBar(scheme),
+            if (!removedFromGroup)
+              _recording
+                  ? VoiceRecorderBar(
+                      onSend: _sendVoice,
+                      onCancel: () => setState(() => _recording = false),
+                      onError: (message) {
+                        setState(() => _recording = false);
+                        showAppSnack(context, message, isError: true);
+                      },
+                    )
+                  : _buildInputBar(scheme),
           ],
         ),
       ),
@@ -280,13 +360,16 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                   icon: const Icon(Icons.send_rounded),
                 )
               : IconButton(
-                  tooltip: 'ถ่ายรูป',
+                  tooltip: 'อัดเสียง',
                   iconSize: 30,
                   color: const Color(0xFF2E86DE),
                   onPressed: _uploading
                       ? null
-                      : () => _pickAndSendImage(ImageSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined),
+                      : () {
+                          FocusScope.of(context).unfocus();
+                          setState(() => _recording = true);
+                        },
+                  icon: const Icon(Icons.mic_none_rounded),
                 ),
         ],
       ),
@@ -298,7 +381,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
         const LinearProgressIndicator(),
         Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Text('กำลังส่งรูปภาพ...',
+          child: Text(_uploadLabel,
               style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
         ),
         inputBar,

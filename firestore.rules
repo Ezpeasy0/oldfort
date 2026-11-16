@@ -43,16 +43,17 @@ service cloud.firestore {
         && validText(request.resource.data.text, 1000);
     }
 
-    function validImageMessage(chatId) {
+    function validMediaMessage(chatId) {
       let d = request.resource.data;
-      return d.keys().hasOnly(['senderId', 'type', 'mediaPath', 'mediaUrl', 'width', 'height', 'createdAt'])
-        && d.type == 'image'
+      return d.keys().hasOnly(['senderId', 'type', 'mediaPath', 'mediaUrl', 'width', 'height', 'durationMs', 'createdAt'])
+        && d.type in ['image', 'audio', 'video']
         && d.mediaPath is string
         && d.mediaPath.matches('chats/' + chatId + '/' + request.auth.uid + '/[^/]+')
         && d.mediaUrl is string
         && d.mediaUrl.size() <= 2048
-        && d.width is int && d.width > 0
-        && d.height is int && d.height > 0;
+        && (!('width' in d) || (d.width is int && d.width > 0))
+        && (!('height' in d) || (d.height is int && d.height > 0))
+        && (!('durationMs' in d) || (d.durationMs is int && d.durationMs > 0 && d.durationMs <= 180000));
     }
 
     function onlyMyReadChanged() {
@@ -234,7 +235,7 @@ service cloud.firestore {
 
         allow create: if signedIn()
           && request.resource.data.senderId == request.auth.uid
-          && (validTextMessage() || validImageMessage(chatId))
+          && (validTextMessage() || validMediaMessage(chatId))
           && request.resource.data.createdAt == request.time
           && (
             isCommunityChat(chatId)
