@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../friends/data/friend_repository.dart';
@@ -23,22 +24,34 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
   final _textController = TextEditingController();
   bool _sending = false;
   DateTime? _markedUpTo;
+  List<ChatMessage>? _latestMessages;
+  late final AppLifecycleListener _lifecycle;
 
   ChatType get _type => chatTypeOf(widget.chatId);
 
   @override
   void initState() {
     super.initState();
+    PushService.openChatId = widget.chatId;
+    _lifecycle = AppLifecycleListener(onResume: () {
+      final latest = _latestMessages;
+      if (latest != null) _markRead(latest);
+    });
     _textController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
+    if (PushService.openChatId == widget.chatId) PushService.openChatId = null;
+    _lifecycle.dispose();
     _textController.dispose();
     super.dispose();
   }
 
   void _markRead(List<ChatMessage> messages) {
+    _latestMessages = messages;
+    final appState = WidgetsBinding.instance.lifecycleState;
+    if (appState != null && appState != AppLifecycleState.resumed) return;
     final myUid = ref.read(myUidProvider);
     if (myUid == null || messages.isEmpty) return;
     final newest = messages.first.createdAt;

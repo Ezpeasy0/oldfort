@@ -1,4 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/https');
+const { onDocumentCreated } = require('firebase-functions/firestore');
 const { setGlobalOptions } = require('firebase-functions');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -51,3 +52,61 @@ exports.checkPhone = onCall(async (request) => {
 
   return { registered: !snap.empty };
 });
+
+const STALE_TOKEN_ERRORS = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+  'messaging/invalid-argument',
+]);
+
+function previewOf(message) {
+  const text = typeof message.text === 'string' ? message.text.trim() : '';
+  if (!text) return 'ส่งข้อความใหม่';
+  return text.length > 100 ? `${text.slice(0, 100)}…` : text;
+}
+
+exports.notifyNewMessage = onDocumentCreated(
+  'chats/{chatId}/messages/{messageId}',
+  async (event) => {
+    const chatId = event.params.chatId;
+    if (chatId.startsWith('community_')) return;
+
+    const message = event.data && event.data.data();
+    if (!message || typeof message.senderId !== 'string') return;
+
+    const chatSnap = await db.collection('chats').doc(chatId).get();
+    if (!chatSnap.exists) return;
+    const chat = chatSnap.data();
+
+    const recipients = (chat.memberIds || []).filter((uid) => uid !== message.senderId);
+    if (recipients.length === 0) return;
+
+    const senderSnap = await db.collection('publicProfiles').doc(message.senderId).get();
+    const senderName = (senderSnap.exists && senderSnap.data().nickname) || 'เพื่อน';
+
+    const isGroup = chat.type === 'group';
+    const title = isGroup ? chat.name || 'แชทกลุ่ม' : senderName;
+    const body = isGroup ? `${senderName}: ${previewOf(message)}` : previewOf(message);
+
+    const deviceSnaps = await Promise.all(
+      recipients.map((uid) => db.collection('users').doc(uid).collection('devices').get()),
+    );
+    const deviceRefs = deviceSnaps.flatMap((snap) => snap.docs.map((doc) => doc.ref));
+    if (deviceRefs.length === 0) return;
+
+    const result = await admin.messaging().sendEachForMulticast({
+      tokens: deviceRefs.map((ref) => ref.id),
+      notification: { title, body },
+      data: { chatId },
+      android: { priority: 'high', notification: { tag: chatId, channelId: 'chat_messages' } },
+    });
+
+    const cleanups = [];
+    result.responses.forEach((res, i) => {
+      if (!res.success && res.error && STALE_TOKEN_ERRORS.has(res.error.code)) {
+        cleanups.push(deviceRefs[i].delete());
+      }
+    });
+    await Promise.all(cleanups);
+  },
+);

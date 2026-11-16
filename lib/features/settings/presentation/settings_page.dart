@@ -1,15 +1,17 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
-  Future<void> _confirmSignOut(BuildContext context) async {
+  Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -28,12 +30,13 @@ class SettingsPage extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
+      await ref.read(pushServiceProvider).stop();
       await FirebaseAuth.instance.signOut(); // router to log in
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -88,7 +91,7 @@ class SettingsPage extends StatelessWidget {
                     backgroundColor: AppColors.sos,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: () => _confirmSignOut(context),
+                  onPressed: () => _confirmSignOut(context, ref),
                   child: const Text('ออกจากระบบ'),
                 ),
               ),

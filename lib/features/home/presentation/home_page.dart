@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -47,72 +48,74 @@ class HomePage extends ConsumerWidget {
       _MenuItem('แบบสอบถาม\nสุขภาพทั่วไป', Icons.question_mark_rounded),
     ];
 
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _Header(name: profile?.fullName ?? ''),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-              child: Column(
-                children: [
-                  for (var i = 0; i < menus.length; i += 2)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _MenuTile(
-                              item: menus[i],
-                              onTap: () => _openMenu(context, menus[i]),
+    return PushStarter(
+      child: Scaffold(
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              _Header(name: profile?.fullName ?? ''),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < menus.length; i += 2)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _MenuTile(
+                                item: menus[i],
+                                onTap: () => _openMenu(context, menus[i]),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _MenuTile(
-                              item: menus[i + 1],
-                              onTap: () => _openMenu(context, menus[i + 1]),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              child: _MenuTile(
+                                item: menus[i + 1],
+                                onTap: () => _openMenu(context, menus[i + 1]),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
 
-                  Row(
-                    children: [
-                      const Spacer(),
-                      Expanded(
-                        flex: 2,
-                        child: _MenuTile(
-                          item: const _MenuItem('การตั้งค่า', Icons.settings_outlined),
-                          onTap: () => context.push(AppRoutes.settings),
+                    Row(
+                      children: [
+                        const Spacer(),
+                        Expanded(
+                          flex: 2,
+                          child: _MenuTile(
+                            item: const _MenuItem('การตั้งค่า', Icons.settings_outlined),
+                            onTap: () => context.push(AppRoutes.settings),
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // ปุ่ม SOS โทร 1669 (ใหญ่กว่าปุ่มอื่นเล็กน้อย)
-                  Row(
-                    children: [
-                      const Spacer(),
-                      Expanded(
-                        flex: 3,
-                        child: _MenuTile(
-                          item: const _MenuItem('โทร. 1669', Icons.phone_in_talk_rounded),
-                          color: AppColors.sos,
-                          labelColor: AppColors.sos,
-                          onTap: () => _callSos(context),
+                        const Spacer(),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // ปุ่ม SOS โทร 1669 (ใหญ่กว่าปุ่มอื่นเล็กน้อย)
+                    Row(
+                      children: [
+                        const Spacer(),
+                        Expanded(
+                          flex: 3,
+                          child: _MenuTile(
+                            item: const _MenuItem('โทร. 1669', Icons.phone_in_talk_rounded),
+                            color: AppColors.sos,
+                            labelColor: AppColors.sos,
+                            onTap: () => _callSos(context),
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                    ],
-                  ),
-                ],
+                        const Spacer(),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

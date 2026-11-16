@@ -63,6 +63,14 @@ service cloud.firestore {
         && validNames(request.resource.data);
 
       allow delete: if false;
+
+      match /devices/{token} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['platform', 'updatedAt'])
+          && request.resource.data.platform == 'android'
+          && request.resource.data.updatedAt == request.time;
+      }
     }
 
     match /publicProfiles/{uid} {
