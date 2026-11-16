@@ -410,6 +410,7 @@ class _RoomHeader extends ConsumerWidget {
 
     var title = '...';
     var icon = Icons.forum_rounded;
+    String? avatarUrl;
     VoidCallback? onTitleTap;
     Widget? action;
 
@@ -419,15 +420,16 @@ class _RoomHeader extends ConsumerWidget {
         icon = Icons.forum_rounded;
       case ChatType.private:
         final otherUid = (chat != null && myUid != null) ? chat!.otherMemberId(myUid!) : '';
-        title = otherUid.isEmpty
-            ? '...'
-            : ref.watch(publicProfileProvider(otherUid)).value?.nickname ?? '...';
+        final other = otherUid.isEmpty ? null : ref.watch(publicProfileProvider(otherUid)).value;
+        title = other?.nickname ?? '...';
+        avatarUrl = other?.photoUrl;
         icon = Icons.person_rounded;
         if (otherUid.isNotEmpty) {
           onTitleTap = () => context.push(AppRoutes.userProfilePath(otherUid));
         }
       case ChatType.group:
         title = chat?.name ?? '...';
+        avatarUrl = chat?.photoUrl;
         icon = Icons.groups_rounded;
         final isOwner = chat != null && chat!.ownerId == myUid;
         if (chat != null && myUid != null && chat!.memberIds.contains(myUid)) {
@@ -465,7 +467,7 @@ class _RoomHeader extends ConsumerWidget {
                         ProfileAvatar(
                           size: 40,
                           icon: icon,
-                          imageUrl: type == ChatType.group ? chat?.photoUrl : null,
+                          imageUrl: avatarUrl,
                         ),
                         const SizedBox(width: 12),
                         Expanded(

@@ -10,11 +10,13 @@ class PublicProfile {
     required this.uid,
     required this.nickname,
     required this.friendCode,
+    this.photoUrl,
   });
 
   final String uid;
   final String nickname;
   final String friendCode;
+  final String? photoUrl;
 
   factory PublicProfile.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
@@ -22,6 +24,7 @@ class PublicProfile {
       uid: doc.id,
       nickname: data['nickname'] as String? ?? '',
       friendCode: data['friendCode'] as String? ?? '',
+      photoUrl: data['photoUrl'] as String?,
     );
   }
 }

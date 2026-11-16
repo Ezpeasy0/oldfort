@@ -163,7 +163,7 @@ class MessageBubble extends ConsumerWidget {
           if (showSender) ...[
             GestureDetector(
               onTap: onSenderTap,
-              child: const ProfileAvatar(size: 44),
+              child: UserAvatar(uid: message.senderId, size: 44),
             ),
             const SizedBox(width: 8),
           ],

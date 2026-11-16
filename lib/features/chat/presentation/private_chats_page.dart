@@ -110,7 +110,9 @@ class _ChatListTile extends ConsumerWidget {
           children: [
             ProfileAvatar(
               icon: isGroup ? Icons.groups_rounded : Icons.person_rounded,
-              imageUrl: isGroup ? chat.photoUrl : null,
+              imageUrl: isGroup
+                  ? chat.photoUrl
+                  : ref.watch(publicProfileProvider(chat.otherMemberId(myUid))).value?.photoUrl,
             ),
             const SizedBox(width: 16),
             Expanded(

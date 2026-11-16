@@ -7,6 +7,8 @@ import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../friends/data/friend_repository.dart';
+import '../../friends/presentation/friend_widgets.dart';
 import '../../user/data/user_repository.dart';
 
 class HomePage extends ConsumerWidget {
@@ -53,7 +55,10 @@ class HomePage extends ConsumerWidget {
         body: SingleChildScrollView(
           child: Column(
             children: [
-              _Header(name: profile?.fullName ?? ''),
+              _Header(
+                name: profile?.fullName ?? '',
+                photoUrl: ref.watch(myPublicProfileProvider).value?.photoUrl,
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
                 child: Column(
@@ -131,9 +136,10 @@ class _MenuItem {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.name});
+  const _Header({required this.name, this.photoUrl});
 
   final String name;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -153,19 +159,25 @@ class _Header extends StatelessWidget {
           bottomRight: Radius.elliptical(300, 90),
         ),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.person_outline_rounded, size: 52, color: scheme.tertiary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 24, color: scheme.onSurface),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.push(AppRoutes.profile),
+        child: Row(
+          children: [
+            photoUrl == null
+                ? Icon(Icons.person_outline_rounded, size: 52, color: scheme.tertiary)
+                : ProfileAvatar(size: 56, imageUrl: photoUrl),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 24, color: scheme.onSurface),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

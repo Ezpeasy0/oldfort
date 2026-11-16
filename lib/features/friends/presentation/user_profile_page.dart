@@ -110,7 +110,7 @@ class _UserProfilePageState extends ConsumerState<UserProfilePage> {
                     style: TextStyle(fontSize: 20, color: scheme.onSurfaceVariant)),
               )
             else ...[
-              const Center(child: ProfileAvatar(size: 200)),
+              Center(child: UserAvatar(uid: widget.uid, size: 200)),
               const SizedBox(height: 24),
               Center(
                 child: Text(

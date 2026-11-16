@@ -102,8 +102,11 @@ service cloud.firestore {
 
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['nickname', 'updatedAt'])
-        && validText(request.resource.data.nickname, 30);
+             .hasOnly(['nickname', 'photoUrl', 'updatedAt'])
+        && validText(request.resource.data.nickname, 30)
+        && (!('photoUrl' in request.resource.data)
+          || (request.resource.data.photoUrl is string
+            && request.resource.data.photoUrl.size() <= 2048));
 
       allow delete: if false;
     }

@@ -2,12 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../chat/data/chat_repository.dart';
+import '../../chat/presentation/image_picking.dart';
 import '../../friends/data/friend_repository.dart';
+import '../../friends/presentation/friend_widgets.dart';
 import '../../user/data/app_user.dart';
+import '../../user/data/profile_photo_repository.dart';
 import '../../user/data/user_repository.dart';
 
 class ProfilePage extends ConsumerWidget {
@@ -42,11 +47,65 @@ class ProfilePage extends ConsumerWidget {
     }
   }
 
+  Future<void> _changePhoto(BuildContext context, WidgetRef ref, String uid, String? oldUrl) async {
+    PickedImage? image;
+    try {
+      image = await pickChatImage(ImageSource.gallery, maxSize: 800);
+    } catch (_) {
+      if (context.mounted) showAppSnack(context, 'เปิดรูปภาพไม่สำเร็จ', isError: true);
+      return;
+    }
+    if (image == null || !context.mounted) return;
+    showAppSnack(context, 'กำลังอัปโหลดรูป...');
+    try {
+      await ref.read(profilePhotoRepositoryProvider).setPhoto(uid, image, oldUrl: oldUrl);
+      if (context.mounted) showAppSnack(context, 'เปลี่ยนรูปโปรไฟล์แล้ว');
+    } on FirebaseException catch (e) {
+      if (context.mounted) {
+        showAppSnack(context, 'เปลี่ยนรูปไม่สำเร็จ (${e.code})', isError: true);
+      }
+    }
+  }
+
+  Future<void> _removePhoto(BuildContext context, WidgetRef ref, String uid, String oldUrl) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบรูปโปรไฟล์'),
+        content: const Text(
+          'ต้องการลบรูปโปรไฟล์ใช่ไหม',
+          style: TextStyle(fontSize: 18),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ลบรูป'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(profilePhotoRepositoryProvider).removePhoto(uid, oldUrl);
+      if (context.mounted) showAppSnack(context, 'ลบรูปโปรไฟล์แล้ว');
+    } on FirebaseException catch (e) {
+      if (context.mounted) {
+        showAppSnack(context, 'ลบรูปไม่สำเร็จ (${e.code})', isError: true);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final profile = ref.watch(currentUserProfileProvider).value;
-    final friendCode = ref.watch(myPublicProfileProvider).value?.friendCode;
+    final publicProfile = ref.watch(myPublicProfileProvider).value;
+    final friendCode = publicProfile?.friendCode;
+    final photoUrl = publicProfile?.photoUrl;
 
     return Scaffold(
       body: SafeArea(
@@ -59,18 +118,31 @@ class ProfilePage extends ConsumerWidget {
                   const PageTitle('ตั้งค่าผู้ใช้'),
                   const SizedBox(height: 16),
                   Center(
-                    child: Container(
-                      width: 130,
-                      height: 130,
-                      decoration: BoxDecoration(
-                        color: scheme.surface,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: scheme.tertiary),
-                      ),
-                      child: Icon(Icons.person_rounded, size: 90, color: scheme.tertiary),
+                    child: GestureDetector(
+                      onTap: () => _changePhoto(context, ref, profile.uid, photoUrl),
+                      child: ProfileAvatar(size: 130, imageUrl: photoUrl),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _changePhoto(context, ref, profile.uid, photoUrl),
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('เปลี่ยนรูปโปรไฟล์', style: TextStyle(fontSize: 18)),
+                      ),
+                      if (photoUrl != null)
+                        TextButton.icon(
+                          onPressed: () => _removePhoto(context, ref, profile.uid, photoUrl),
+                          icon: Icon(Icons.delete_outline_rounded, color: scheme.error),
+                          label: Text(
+                            'ลบรูป',
+                            style: TextStyle(fontSize: 18, color: scheme.error),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   Center(
                     child: Text(
                       profile.nickname,

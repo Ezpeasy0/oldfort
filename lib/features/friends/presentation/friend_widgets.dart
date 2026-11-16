@@ -43,6 +43,19 @@ class ProfileAvatar extends StatelessWidget {
   }
 }
 
+class UserAvatar extends ConsumerWidget {
+  const UserAvatar({super.key, required this.uid, this.size = 56});
+
+  final String uid;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final url = uid.isEmpty ? null : ref.watch(publicProfileProvider(uid)).value?.photoUrl;
+    return ProfileAvatar(size: size, imageUrl: url);
+  }
+}
+
 class PersonTile extends ConsumerWidget {
   const PersonTile({super.key, required this.uid, this.onTap, this.below});
 
@@ -64,7 +77,7 @@ class PersonTile extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            const ProfileAvatar(),
+            UserAvatar(uid: uid),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
