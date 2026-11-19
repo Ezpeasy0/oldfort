@@ -15,9 +15,9 @@
 - เกมทดสอบความจำและฝึกการฟัง
 - แบบสอบถามสุขภาพทั่วไป (GHQ-12)
 - บทความสุขภาพและหมวดหมู่
-- ติดต่อขอความช่วยเหลือกับฝ่ายสนุนภายในแอป
+- ติดต่อขอความช่วยเหลือกับฝ่ายสนับสนุนภายในแอป
 
 ## Technology
 
 - **Flutter** (Android, ขั้นต่ำ Android 8.0 / API 26)
-- **Firebase**: Authentication (Phone), Cloud Firestore
+- **Firebase**: Authentication (Phone), Cloud Firestore, Function, Storage
