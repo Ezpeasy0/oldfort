@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/admin/presentation/admin_rooms_page.dart';
+import '../../features/admin/presentation/admin_users_page.dart';
+import '../../features/admin/presentation/support_inbox_page.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/otp_page.dart';
 import '../../features/auth/presentation/pdpa_page.dart';
@@ -17,6 +20,7 @@ import '../../features/settings/presentation/change_phone_page.dart';
 import '../../features/settings/presentation/display_settings_page.dart';
 import '../../features/settings/presentation/profile_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
+import '../../features/support/presentation/support_start_page.dart';
 import '../session/session_controller.dart';
 
 class AppRoutes {
@@ -40,10 +44,16 @@ class AppRoutes {
   static const createGroup = '/chat/private/new-group';
   static const chatRoom = '/chat/room/:chatId';
   static const groupSettings = '/chat/room/:chatId/settings';
+  static const support = '/support';
+  static const adminSupport = '/admin/support';
+  static const adminUsers = '/admin/users';
+  static const adminUserDetail = '/admin/users/:uid';
+  static const adminRooms = '/admin/rooms';
 
   static String userProfilePath(String uid) => '/user/$uid';
   static String chatRoomPath(String chatId) => '/chat/room/$chatId';
   static String groupSettingsPath(String chatId) => '/chat/room/$chatId/settings';
+  static String adminUserDetailPath(String uid) => '/admin/users/$uid';
 }
 
 class OtpArgs {
@@ -178,6 +188,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.groupSettings,
         builder: (context, state) =>
             GroupSettingsPage(chatId: state.pathParameters['chatId']!),
+      ),
+      GoRoute(
+        path: AppRoutes.support,
+        builder: (context, state) => const SupportStartPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminSupport,
+        builder: (context, state) => const SupportInboxPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminUsers,
+        builder: (context, state) => const AdminUsersPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminUserDetail,
+        builder: (context, state) =>
+            AdminUserDetailPage(uid: state.pathParameters['uid']!),
+      ),
+      GoRoute(
+        path: AppRoutes.adminRooms,
+        builder: (context, state) => const AdminRoomsPage(),
       ),
     ],
   );

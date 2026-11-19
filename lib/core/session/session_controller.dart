@@ -25,6 +25,9 @@ class SessionController extends ChangeNotifier {
 
   String? errorMessage;
 
+  /// Set when the account was suspended by an admin; the login page shows it once.
+  static String? signOutNotice;
+
   String? _phoneSyncTried;
   String? _publicProfileChecked;
 
@@ -44,6 +47,11 @@ class SessionController extends ChangeNotifier {
         .snapshots(includeMetadataChanges: true)
         .listen(
       (snap) {
+        if (snap.exists && snap.data()?['suspended'] == true) {
+          signOutNotice = 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
+          _auth.signOut();
+          return;
+        }
         if (snap.exists) {
           _syncPhoneIfNeeded(user.uid, snap.data());
           _ensurePublicProfile(user.uid, snap);

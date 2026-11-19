@@ -7,8 +7,17 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('role', 'member') == 'admin';
+    }
+
     function isCommunityChat(chatId) {
-      return chatId in ['community_cooking', 'community_dharma', 'community_pets'];
+      return chatId.matches('community_.+')
+        && firestore.exists(/databases/(default)/documents/communityRooms/$(chatId));
+    }
+
+    function isSupportChat(chatId) {
+      return chatId.matches('support_[A-Za-z0-9]+');
     }
 
     function chatData(chatId) {
@@ -16,7 +25,9 @@ service firebase.storage {
     }
 
     function isMember(chatId) {
-      return isCommunityChat(chatId) || request.auth.uid in chatData(chatId).memberIds;
+      return isCommunityChat(chatId)
+        || (isSupportChat(chatId) && (chatId == 'support_' + request.auth.uid || isAdmin()))
+        || (!isSupportChat(chatId) && request.auth.uid in chatData(chatId).get('memberIds', []));
     }
 
     function isTypeUnder(type, maxMb) {
@@ -44,6 +55,13 @@ service firebase.storage {
         && chatData(chatId).ownerId == request.auth.uid
         && isImageUnder(5);
       allow update, delete: if false;
+    }
+
+    match /rooms/{roomId}/{fileName} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isAdmin() && isImageUnder(5);
+      allow delete: if signedIn() && isAdmin();
+      allow update: if false;
     }
 
     match /users/{uid}/{fileName} {

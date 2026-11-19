@@ -9,7 +9,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../friends/data/friend_repository.dart';
 import '../../friends/presentation/friend_widgets.dart';
+import '../../user/data/user_repository.dart';
 import '../data/chat_repository.dart';
+import '../data/community_room_repository.dart';
 import 'chat_media.dart';
 import 'chat_widgets.dart';
 import 'image_picking.dart';
@@ -34,6 +36,50 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
   late final AppLifecycleListener _lifecycle;
 
   ChatType get _type => chatTypeOf(widget.chatId);
+
+  String get _deniedMessage => switch (_type) {
+        ChatType.private => 'ส่งไม่ได้ เพราะไม่ได้เป็นเพื่อนกันแล้ว',
+        ChatType.group => 'ส่งไม่ได้ คุณอาจไม่ได้อยู่ในกลุ่มนี้แล้ว',
+        ChatType.community => 'ส่งไม่ได้ ห้องนี้ถูกปิดแล้ว',
+        ChatType.support => 'ส่งไม่ได้ การสนทนานี้จบแล้ว',
+      };
+
+  Future<void> _confirmEndSupport(String myUid) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('จบการสนทนา'),
+        content: const Text(
+          'แก้ไขปัญหาหรือตอบคำถามเสร็จแล้วใช่ไหม\nสมาชิกจะพิมพ์ต่อในรอบนี้ไม่ได้',
+          style: TextStyle(fontSize: 18),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ยกเลิก'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('จบการสนทนา'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(chatRepositoryProvider).endSupport(widget.chatId, myUid);
+    } on FirebaseException catch (e) {
+      if (mounted) showAppSnack(context, 'จบการสนทนาไม่สำเร็จ (${e.code})', isError: true);
+    }
+  }
+
+  Future<void> _restartSupport(ChatRoom chat, String myUid) async {
+    try {
+      await ref.read(chatRepositoryProvider).startSupport(chat.supportMemberUid, myUid);
+    } on FirebaseException catch (e) {
+      if (mounted) showAppSnack(context, 'เริ่มแชทใหม่ไม่สำเร็จ (${e.code})', isError: true);
+    }
+  }
 
   @override
   void initState() {
@@ -88,9 +134,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
       if (!mounted) return;
       _textController.text = text;
       final message = e.code == 'permission-denied'
-          ? (_type == ChatType.private
-              ? 'ส่งไม่ได้ เพราะไม่ได้เป็นเพื่อนกันแล้ว'
-              : 'ส่งไม่ได้ คุณอาจไม่ได้อยู่ในกลุ่มนี้แล้ว')
+          ? _deniedMessage
           : 'ส่งข้อความไม่สำเร็จ (${e.code})';
       showAppSnack(context, message, isError: true);
     } finally {
@@ -172,9 +216,7 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
     } on FirebaseException catch (e) {
       if (!mounted) return;
       final message = e.code == 'permission-denied' || e.code == 'unauthorized'
-          ? (_type == ChatType.private
-              ? 'ส่งไม่ได้ เพราะไม่ได้เป็นเพื่อนกันแล้ว'
-              : 'ส่งไม่ได้ คุณอาจไม่ได้อยู่ในกลุ่มนี้แล้ว')
+          ? _deniedMessage
           : '$failMessage (${e.code})';
       showAppSnack(context, message, isError: true);
     } finally {
@@ -244,6 +286,9 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
       },
     );
 
+    final isAdmin = ref.watch(currentUserProfileProvider).value?.isAdmin ?? false;
+    final supportClosed = _type == ChatType.support && chat != null && chat.isClosed;
+
     final removedFromGroup = _type == ChatType.group &&
         myUid != null &&
         ref.watch(chatProvider(widget.chatId)).hasValue &&
@@ -257,7 +302,9 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
               chatId: widget.chatId,
               chat: chat,
               myUid: myUid,
+              isAdmin: isAdmin,
               onLeave: myUid == null ? null : () => _confirmLeave(myUid),
+              onEndSupport: myUid == null ? null : () => _confirmEndSupport(myUid),
             ),
             Divider(height: 1, color: scheme.outlineVariant),
             Expanded(
@@ -281,6 +328,9 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final message = messages[index];
+                            if (message.isSystem) {
+                              return _SystemNote(message: message);
+                            }
                             final isMine = message.senderId == myUid;
                             final sentAt = message.createdAt;
                             final readers = (isMine && chat != null && sentAt != null)
@@ -291,16 +341,26 @@ class _ChatRoomPageState extends ConsumerState<ChatRoomPage> {
                               isMine: isMine,
                               chatType: _type,
                               readers: readers,
-                              onSenderTap: () => context.push(
-                                AppRoutes.userProfilePath(message.senderId),
-                              ),
+                              onSenderTap: _type == ChatType.support
+                                  ? (isAdmin && message.senderId == chat?.supportMemberUid
+                                      ? () => context.push(
+                                            AppRoutes.adminUserDetailPath(message.senderId))
+                                      : null)
+                                  : () => context.push(
+                                        AppRoutes.userProfilePath(message.senderId),
+                                      ),
                             );
                           },
                         );
                       },
                     ),
             ),
-            if (!removedFromGroup)
+            if (supportClosed && myUid != null)
+              _SupportClosedBar(
+                isAdmin: isAdmin,
+                onRestart: () => _restartSupport(chat, myUid),
+              )
+            else if (!removedFromGroup)
               _recording
                   ? VoiceRecorderBar(
                       onSend: _sendVoice,
@@ -395,13 +455,17 @@ class _RoomHeader extends ConsumerWidget {
     required this.chatId,
     required this.chat,
     required this.myUid,
+    required this.isAdmin,
     required this.onLeave,
+    required this.onEndSupport,
   });
 
   final String chatId;
   final ChatRoom? chat;
   final String? myUid;
+  final bool isAdmin;
   final VoidCallback? onLeave;
+  final VoidCallback? onEndSupport;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -416,8 +480,36 @@ class _RoomHeader extends ConsumerWidget {
 
     switch (type) {
       case ChatType.community:
-        title = communityRoomById(chatId)?.name ?? 'แชทชุมชน';
-        icon = Icons.forum_rounded;
+        final room = ref.watch(communityRoomProvider(chatId)).value;
+        title = room?.name ?? 'แชทชุมชน';
+        icon = room == null ? Icons.forum_rounded : roomIconOf(room.icon);
+      case ChatType.support:
+        icon = Icons.support_agent_rounded;
+        if (isAdmin) {
+          final memberUid = chatTypeOf(chatId) == ChatType.support ? chatId.substring(8) : '';
+          final member = ref.watch(publicProfileProvider(memberUid)).value;
+          title = member?.nickname ?? '...';
+          avatarUrl = member?.photoUrl;
+          onTitleTap = () => context.push(AppRoutes.adminUserDetailPath(memberUid));
+          if (chat != null && !chat!.isClosed) {
+            action = OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: scheme.error,
+                side: BorderSide(color: scheme.error),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              onPressed: onEndSupport,
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('จบการสนทนา', style: TextStyle(fontSize: 16)),
+            );
+          }
+        } else {
+          final adminUid = chat?.lastAdminId;
+          final adminProfile =
+              adminUid == null ? null : ref.watch(publicProfileProvider(adminUid)).value;
+          title = adminProfile?.nickname ?? 'ฝ่ายสนับสนุน';
+          avatarUrl = adminProfile?.photoUrl;
+        }
       case ChatType.private:
         final otherUid = (chat != null && myUid != null) ? chat!.otherMemberId(myUid!) : '';
         final other = otherUid.isEmpty ? null : ref.watch(publicProfileProvider(otherUid)).value;
@@ -510,6 +602,76 @@ class _CenterNote extends StatelessWidget {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SystemNote extends ConsumerWidget {
+  const _SystemNote({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final String text;
+    if (message.text == 'closed') {
+      final name = ref.watch(publicProfileProvider(message.senderId)).value?.nickname ?? 'ผู้ดูแล';
+      text = '$name จบการสนทนาแล้ว';
+    } else {
+      text = 'เริ่มการสนทนา';
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$text · ${formatChatTime(message.createdAt ?? DateTime.now())}',
+            style: TextStyle(fontSize: 15, color: scheme.onSurfaceVariant),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SupportClosedBar extends StatelessWidget {
+  const _SupportClosedBar({required this.isAdmin, required this.onRestart});
+
+  final bool isAdmin;
+  final VoidCallback onRestart;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'การสนทนานี้จบแล้ว',
+            style: TextStyle(fontSize: 18, color: scheme.onSurfaceVariant),
+          ),
+          TextButton(
+            onPressed: onRestart,
+            child: Text(
+              isAdmin ? 'เปิดการสนทนาอีกครั้ง' : 'เริ่มแชทใหม่',
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
       ),
     );
   }

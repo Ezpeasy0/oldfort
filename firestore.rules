@@ -26,8 +26,30 @@ service cloud.firestore {
         || exists(/databases/$(database)/documents/friendships/$(b + '_' + a));
     }
 
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'member') == 'admin';
+    }
+
     function isCommunityChat(chatId) {
-      return chatId in ['community_cooking', 'community_dharma', 'community_pets'];
+      return chatId.matches('community_.+')
+        && exists(/databases/$(database)/documents/communityRooms/$(chatId));
+    }
+
+    function communityRoomOpen(chatId) {
+      return get(/databases/$(database)/documents/communityRooms/$(chatId)).data.open == true;
+    }
+
+    function isSupportChat(chatId) {
+      return chatId.matches('support_[A-Za-z0-9]+');
+    }
+
+    function isSupportOwner(chatId) {
+      return signedIn() && chatId == 'support_' + request.auth.uid;
+    }
+
+    function canUseSupport(chatId) {
+      return isSupportChat(chatId) && (isSupportOwner(chatId) || isAdmin());
     }
 
     function isPrivateChat(chatId) {
@@ -36,6 +58,16 @@ service cloud.firestore {
 
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function validSystemMessage(chatId) {
+      let d = request.resource.data;
+      let after = getAfter(/databases/$(database)/documents/chats/$(chatId)).data;
+      return isSupportChat(chatId)
+        && d.keys().hasOnly(['senderId', 'type', 'text', 'createdAt'])
+        && d.type == 'system'
+        && ((d.text == 'started' && after.status == 'open')
+          || (d.text == 'closed' && after.status == 'closed' && isAdmin()));
     }
 
     function validTextMessage() {
@@ -63,7 +95,7 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid);
+      allow read: if isOwner(uid) || isAdmin();
 
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly([
@@ -107,6 +139,30 @@ service cloud.firestore {
         && (!('photoUrl' in request.resource.data)
           || (request.resource.data.photoUrl is string
             && request.resource.data.photoUrl.size() <= 2048));
+
+      allow delete: if false;
+    }
+
+    match /communityRooms/{roomId} {
+      function validRoom(d) {
+        return validText(d.name, 30)
+          && d.icon in ['cooking', 'dharma', 'pets', 'garden', 'music', 'travel', 'health', 'chat']
+          && d.open is bool
+          && d.order is int
+          && (!('imageUrl' in d) || (d.imageUrl is string && d.imageUrl.size() <= 2048));
+      }
+
+      allow read: if signedIn();
+
+      allow create: if isAdmin()
+        && roomId.matches('community_[A-Za-z0-9]+')
+        && request.resource.data.keys().hasOnly(['name', 'icon', 'open', 'order', 'createdAt'])
+        && validRoom(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin()
+        && onlyChanged(['name', 'icon', 'open', 'imageUrl'])
+        && validRoom(request.resource.data);
 
       allow delete: if false;
     }
@@ -165,13 +221,23 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow get: if signedIn() && (
         isCommunityChat(chatId)
+        || canUseSupport(chatId)
         || (isPrivateChat(chatId) && request.auth.uid in chatId.split('_'))
-        || (resource != null && request.auth.uid in resource.data.memberIds)
+        || (resource != null && request.auth.uid in resource.data.get('memberIds', []))
       );
-      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow list: if signedIn() && (
+        (resource.data.type == 'support' && isAdmin())
+        || request.auth.uid in resource.data.get('memberIds', [])
+      );
 
       allow create: if signedIn() && (
-        (isCommunityChat(chatId)
+        (canUseSupport(chatId)
+          && request.resource.data.keys().hasOnly(['type', 'status', 'createdAt', 'lastMessage', 'lastMessageAt', 'lastSenderId', 'lastReadAt'])
+          && request.resource.data.type == 'support'
+          && request.resource.data.status == 'open'
+          && request.resource.data.lastSenderId == request.auth.uid
+          && request.resource.data.lastReadAt.keys().hasOnly([request.auth.uid]))
+        || (isCommunityChat(chatId)
           && request.resource.data.keys().hasOnly(['type', 'lastReadAt'])
           && request.resource.data.type == 'community'
           && request.resource.data.lastReadAt.keys().hasOnly([request.auth.uid]))
@@ -185,7 +251,7 @@ service cloud.firestore {
           && areFriends(request.resource.data.memberIds[0], request.resource.data.memberIds[1])
           && request.resource.data.createdAt == request.time
           && request.resource.data.lastReadAt.size() == 0)
-        || (!isCommunityChat(chatId) && !isPrivateChat(chatId)
+        || (!chatId.matches('community_.*') && !isPrivateChat(chatId) && !isSupportChat(chatId)
           && request.resource.data.keys().hasOnly(['type', 'name', 'ownerId', 'memberIds', 'createdAt', 'lastReadAt'])
           && request.resource.data.type == 'group'
           && request.resource.data.ownerId == request.auth.uid
@@ -199,7 +265,35 @@ service cloud.firestore {
 
       allow update: if signedIn() && (
         (isCommunityChat(chatId) && onlyChanged(['lastReadAt']) && onlyMyReadChanged())
-        || (!isCommunityChat(chatId) && request.auth.uid in resource.data.memberIds && (
+        || (canUseSupport(chatId) && (
+          (onlyChanged(['lastReadAt']) && onlyMyReadChanged())
+          || (resource.data.status == 'open'
+            && onlyChanged(['lastMessage', 'lastMessageAt', 'lastSenderId', 'lastReadAt', 'lastAdminId'])
+            && onlyMyReadChanged()
+            && request.resource.data.lastSenderId == request.auth.uid
+            && request.resource.data.lastMessageAt == request.time
+            && request.resource.data.lastMessage is string
+            && request.resource.data.lastMessage.size() <= 101
+            && (request.resource.data.get('lastAdminId', null) == resource.data.get('lastAdminId', null)
+              || (request.resource.data.lastAdminId == request.auth.uid && isAdmin())))
+          || (resource.data.status == 'open' && isAdmin()
+            && onlyChanged(['status', 'closedBy', 'lastMessage', 'lastMessageAt', 'lastSenderId', 'lastReadAt'])
+            && onlyMyReadChanged()
+            && request.resource.data.status == 'closed'
+            && request.resource.data.closedBy == request.auth.uid
+            && request.resource.data.lastSenderId == request.auth.uid
+            && request.resource.data.lastMessageAt == request.time)
+          || (resource.data.status == 'closed'
+            && onlyChanged(['status', 'closedBy', 'lastAdminId', 'lastMessage', 'lastMessageAt', 'lastSenderId', 'lastReadAt'])
+            && onlyMyReadChanged()
+            && request.resource.data.status == 'open'
+            && !('closedBy' in request.resource.data)
+            && !('lastAdminId' in request.resource.data)
+            && request.resource.data.lastSenderId == request.auth.uid
+            && request.resource.data.lastMessageAt == request.time)
+        ))
+        || (!isCommunityChat(chatId) && !isSupportChat(chatId)
+          && request.auth.uid in resource.data.get('memberIds', []) && (
           (onlyChanged(['lastReadAt']) && onlyMyReadChanged())
           || (onlyChanged(['lastMessage', 'lastMessageAt', 'lastSenderId', 'lastReadAt'])
             && onlyMyReadChanged()
@@ -234,15 +328,24 @@ service cloud.firestore {
         }
 
         allow read: if signedIn()
-          && (isCommunityChat(chatId) || request.auth.uid in chatDoc().memberIds);
+          && (isCommunityChat(chatId)
+            || canUseSupport(chatId)
+            || request.auth.uid in chatDoc().get('memberIds', []));
 
         allow create: if signedIn()
           && request.resource.data.senderId == request.auth.uid
-          && (validTextMessage() || validMediaMessage(chatId))
           && request.resource.data.createdAt == request.time
           && (
-            isCommunityChat(chatId)
-            || (request.auth.uid in chatDoc().memberIds
+            (canUseSupport(chatId)
+              && (validSystemMessage(chatId)
+                || ((validTextMessage() || validMediaMessage(chatId))
+                  && getAfter(/databases/$(database)/documents/chats/$(chatId)).data.status == 'open')))
+            || ((validTextMessage() || validMediaMessage(chatId))
+              && isCommunityChat(chatId)
+              && communityRoomOpen(chatId))
+            || ((validTextMessage() || validMediaMessage(chatId))
+              && !isSupportChat(chatId)
+              && request.auth.uid in chatDoc().get('memberIds', [])
               && (chatDoc().type == 'group'
                 || areFriends(chatDoc().memberIds[0], chatDoc().memberIds[1])))
           );

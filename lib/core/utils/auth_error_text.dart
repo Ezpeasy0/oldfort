@@ -18,6 +18,8 @@ String authErrorText(FirebaseAuthException e) {
     case 'credential-already-in-use':
     case 'account-exists-with-different-credential':
       return 'เบอร์นี้ถูกใช้กับบัญชีอื่นแล้ว';
+    case 'user-disabled':
+      return 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
     case 'requires-recent-login':
       return 'เพื่อความปลอดภัย กรุณาออกจากระบบแล้วเข้าใหม่ก่อนเปลี่ยนเบอร์';
     default:

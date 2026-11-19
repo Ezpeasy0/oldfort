@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../core/session/session_controller.dart';
 import '../../../core/utils/auth_error_text.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/widgets/app_widgets.dart';
@@ -20,6 +21,18 @@ class _LoginPageState extends State<LoginPage> {
   int _selectedTab = 0;
   final _phoneController = TextEditingController();
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final notice = SessionController.signOutNotice;
+    if (notice != null) {
+      SessionController.signOutNotice = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showAppSnack(context, notice, isError: true);
+      });
+    }
+  }
 
   @override
   void dispose() {

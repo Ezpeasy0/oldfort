@@ -7,6 +7,7 @@ import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../user/data/user_repository.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -38,6 +39,7 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final isAdmin = ref.watch(currentUserProfileProvider).value?.isAdmin ?? false;
 
     return Scaffold(
       body: SafeArea(
@@ -76,12 +78,12 @@ class SettingsPage extends ConsumerWidget {
                 ],
               ),
             ),
-            _SettingsCard(
-              label: 'ติดต่อขอความช่วยเหลือ',
-              onTap: () =>
-                  showAppSnack(context, 'เมนูนี้กำลังพัฒนา เร็ว ๆ นี้'),
-              child: Icon(Icons.support_agent_rounded, size: 80, color: scheme.onSurface),
-            ),
+            if (!isAdmin)
+              _SettingsCard(
+                label: 'ติดต่อขอความช่วยเหลือ',
+                onTap: () => context.push(AppRoutes.support),
+                child: Icon(Icons.support_agent_rounded, size: 80, color: scheme.onSurface),
+              ),
             const SizedBox(height: 16),
             Center(
               child: SizedBox(

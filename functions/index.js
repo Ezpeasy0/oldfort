@@ -76,20 +76,37 @@ exports.notifyNewMessage = onDocumentCreated(
 
     const message = event.data && event.data.data();
     if (!message || typeof message.senderId !== 'string') return;
+    if (message.type === 'system') return;
 
     const chatSnap = await db.collection('chats').doc(chatId).get();
     if (!chatSnap.exists) return;
     const chat = chatSnap.data();
 
-    const recipients = (chat.memberIds || []).filter((uid) => uid !== message.senderId);
-    if (recipients.length === 0) return;
-
     const senderSnap = await db.collection('publicProfiles').doc(message.senderId).get();
     const senderName = (senderSnap.exists && senderSnap.data().nickname) || 'เพื่อน';
 
-    const isGroup = chat.type === 'group';
-    const title = isGroup ? chat.name || 'แชทกลุ่ม' : senderName;
-    const body = isGroup ? `${senderName}: ${previewOf(message)}` : previewOf(message);
+    let recipients;
+    let title;
+    let body;
+    if (chat.type === 'support') {
+      const memberUid = chatId.substring('support_'.length);
+      if (message.senderId === memberUid) {
+        const admins = await db.collection('users').where('role', '==', 'admin').get();
+        recipients = admins.docs.map((doc) => doc.id);
+        title = `แชทช่วยเหลือ: ${senderName}`;
+      } else {
+        recipients = [memberUid];
+        title = 'ฝ่ายสนับสนุน';
+      }
+      body = previewOf(message);
+    } else {
+      recipients = chat.memberIds || [];
+      const isGroup = chat.type === 'group';
+      title = isGroup ? chat.name || 'แชทกลุ่ม' : senderName;
+      body = isGroup ? `${senderName}: ${previewOf(message)}` : previewOf(message);
+    }
+    recipients = recipients.filter((uid) => uid !== message.senderId);
+    if (recipients.length === 0) return;
 
     const deviceSnaps = await Promise.all(
       recipients.map((uid) => db.collection('users').doc(uid).collection('devices').get()),
@@ -113,3 +130,35 @@ exports.notifyNewMessage = onDocumentCreated(
     await Promise.all(cleanups);
   },
 );
+
+exports.setUserSuspended = onCall(async (request) => {
+  const callerUid = request.auth && request.auth.uid;
+  if (!callerUid) throw new HttpsError('unauthenticated', 'sign in required');
+
+  const callerSnap = await db.collection('users').doc(callerUid).get();
+  if (!callerSnap.exists || callerSnap.data().role !== 'admin') {
+    throw new HttpsError('permission-denied', 'admin only');
+  }
+
+  const uid = request.data && request.data.uid;
+  const suspended = request.data && request.data.suspended;
+  if (typeof uid !== 'string' || uid.length === 0 || typeof suspended !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'invalid input');
+  }
+  if (uid === callerUid) throw new HttpsError('failed-precondition', 'cannot suspend yourself');
+
+  const targetRef = db.collection('users').doc(uid);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) throw new HttpsError('not-found', 'user not found');
+  if (targetSnap.data().role === 'admin') {
+    throw new HttpsError('failed-precondition', 'cannot suspend an admin');
+  }
+
+  await admin.auth().updateUser(uid, { disabled: suspended });
+  if (suspended) await admin.auth().revokeRefreshTokens(uid);
+  await targetRef.update({
+    suspended,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { ok: true };
+});

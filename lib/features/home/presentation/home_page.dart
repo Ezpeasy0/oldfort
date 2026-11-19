@@ -7,6 +7,7 @@ import '../../../core/notifications/push_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
+import '../../chat/data/chat_repository.dart';
 import '../../friends/data/friend_repository.dart';
 import '../../friends/presentation/friend_widgets.dart';
 import '../../user/data/user_repository.dart';
@@ -40,6 +41,13 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentUserProfileProvider).value;
+    final photoUrl = ref.watch(myPublicProfileProvider).value?.photoUrl;
+
+    if (profile != null && profile.isAdmin) {
+      return PushStarter(
+        child: _AdminHome(name: profile.fullName, photoUrl: photoUrl),
+      );
+    }
 
     const menus = <_MenuItem>[
       _MenuItem('การแจ้งเตือน\nสุขภาพ', Icons.notifications_none_rounded),
@@ -55,10 +63,7 @@ class HomePage extends ConsumerWidget {
         body: SingleChildScrollView(
           child: Column(
             children: [
-              _Header(
-                name: profile?.fullName ?? '',
-                photoUrl: ref.watch(myPublicProfileProvider).value?.photoUrl,
-              ),
+              _Header(name: profile?.fullName ?? '', photoUrl: photoUrl),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
                 child: Column(
@@ -135,11 +140,67 @@ class _MenuItem {
   final String? route;
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.name, this.photoUrl});
+class _AdminHome extends ConsumerWidget {
+  const _AdminHome({required this.name, this.photoUrl});
 
   final String name;
   final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final waiting = ref.watch(supportChatsProvider).value?.where((c) => c.waitingForAdmin).length ?? 0;
+
+    final menus = <(_MenuItem, int)>[
+      (const _MenuItem('แชทช่วยเหลือ', Icons.support_agent_rounded, AppRoutes.adminSupport), waiting),
+      (const _MenuItem('จัดการผู้ใช้', Icons.manage_accounts_outlined, AppRoutes.adminUsers), 0),
+      (const _MenuItem('ห้องแชทชุมชน', Icons.forum_outlined, AppRoutes.adminRooms), 0),
+      (const _MenuItem('การตั้งค่า', Icons.settings_outlined, AppRoutes.settings), 0),
+    ];
+
+    return Scaffold(
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            _Header(name: name, photoUrl: photoUrl, isAdmin: true),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              child: Column(
+                children: [
+                  for (var i = 0; i < menus.length; i += 2)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final j in [i, i + 1]) ...[
+                            if (j == i + 1) const SizedBox(width: 20),
+                            Expanded(
+                              child: _MenuTile(
+                                item: menus[j].$1,
+                                badge: menus[j].$2,
+                                onTap: () => context.push(menus[j].$1.route!),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.name, this.photoUrl, this.isAdmin = false});
+
+  final String name;
+  final String? photoUrl;
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -169,11 +230,29 @@ class _Header extends StatelessWidget {
                 : ProfileAvatar(size: 56, imageUrl: photoUrl),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 24, color: scheme.onSurface),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 24, color: scheme.onSurface),
+                  ),
+                  if (isAdmin)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'ผู้ดูแลระบบ',
+                        style: TextStyle(fontSize: 15, color: Colors.white),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -189,12 +268,14 @@ class _MenuTile extends StatelessWidget {
     required this.onTap,
     this.color = AppColors.brown,
     this.labelColor,
+    this.badge = 0,
   });
 
   final _MenuItem item;
   final VoidCallback onTap;
   final Color color;
   final Color? labelColor;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +299,31 @@ class _MenuTile extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(item.icon, size: 72, color: Colors.white),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Center(child: Icon(item.icon, size: 72, color: Colors.white)),
+                  if (badge > 0)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 34),
+                        height: 34,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.sos,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$badge',
+                          style: const TextStyle(fontSize: 19, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),

@@ -135,7 +135,7 @@ class MessageBubble extends ConsumerWidget {
                 _ReadStatus(
                   pending: message.pending,
                   readers: readers,
-                  showCount: chatType != ChatType.private,
+                  showCount: chatType == ChatType.community || chatType == ChatType.group,
                 ),
               ],
             ],

@@ -7,34 +7,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../friends/data/friend_repository.dart';
 
-enum ChatType { community, private, group }
+enum ChatType { community, private, group, support }
 
 ChatType chatTypeOf(String chatId) {
   if (chatId.startsWith('community_')) return ChatType.community;
   if (chatId.startsWith('p_')) return ChatType.private;
+  if (chatId.startsWith('support_')) return ChatType.support;
   return ChatType.group;
 }
 
-class CommunityRoom {
-  const CommunityRoom(this.id, this.name, this.image);
-
-  final String id;
-  final String name;
-  final String image;
-}
-
-const communityRooms = [
-  CommunityRoom('community_cooking', 'ทำอาหาร', 'assets/images/chat/room_cooking.png'),
-  CommunityRoom('community_dharma', 'ธรรมะ', 'assets/images/chat/room_dharma.png'),
-  CommunityRoom('community_pets', 'สัตว์เลี้ยง', 'assets/images/chat/room_pets.png'),
-];
-
-CommunityRoom? communityRoomById(String id) {
-  for (final room in communityRooms) {
-    if (room.id == id) return room;
-  }
-  return null;
-}
+String supportChatId(String memberUid) => 'support_$memberUid';
 
 DateTime? _toDate(Object? value) => value is Timestamp ? value.toDate() : null;
 
@@ -51,6 +33,9 @@ class ChatRoom {
     required this.createdAt,
     required this.lastReadAt,
     this.photoUrl,
+    this.status,
+    this.lastAdminId,
+    this.closedBy,
   });
 
   final String id;
@@ -64,6 +49,14 @@ class ChatRoom {
   final String? lastSenderId;
   final DateTime? createdAt;
   final Map<String, DateTime> lastReadAt;
+  final String? status;
+  final String? lastAdminId;
+  final String? closedBy;
+
+  bool get isClosed => status == 'closed';
+  String get supportMemberUid => id.startsWith('support_') ? id.substring(8) : '';
+  bool get waitingForAdmin =>
+      type == ChatType.support && !isClosed && lastSenderId == supportMemberUid;
 
   factory ChatRoom.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
@@ -87,6 +80,9 @@ class ChatRoom {
       createdAt: _toDate(data['createdAt']),
       lastReadAt: reads,
       photoUrl: data['photoUrl'] as String?,
+      status: data['status'] as String?,
+      lastAdminId: data['lastAdminId'] as String?,
+      closedBy: data['closedBy'] as String?,
     );
   }
 
@@ -104,7 +100,9 @@ class ChatRoom {
     var count = 0;
     lastReadAt.forEach((uid, at) {
       if (uid == senderId || at.isBefore(sentAt)) return;
-      if (type != ChatType.community && !memberIds.contains(uid)) return;
+      if ((type == ChatType.private || type == ChatType.group) && !memberIds.contains(uid)) {
+        return;
+      }
       count++;
     });
     return count;
@@ -141,6 +139,7 @@ class ChatMessage {
   bool get isImage => type == 'image' && mediaUrl != null;
   bool get isAudio => type == 'audio' && mediaUrl != null;
   bool get isVideo => type == 'video' && mediaUrl != null;
+  bool get isSystem => type == 'system';
 
   factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
@@ -214,6 +213,70 @@ class ChatRepository {
           ..sort((a, b) => b.sortTime.compareTo(a.sortTime));
         return rooms;
       });
+
+  Stream<List<ChatRoom>> watchSupportChats() => _chats
+      .where('type', isEqualTo: 'support')
+      .snapshots()
+      .map((snap) {
+        final rooms = snap.docs.map(ChatRoom.fromDoc).toList()
+          ..sort((a, b) => b.sortTime.compareTo(a.sortTime));
+        return rooms;
+      });
+
+  Future<void> startSupport(String memberUid, String actorUid) async {
+    final chatId = supportChatId(memberUid);
+    final ref = _chat(chatId);
+    final snap = await ref.get();
+    final batch = _db.batch();
+    final common = <String, dynamic>{
+      'status': 'open',
+      'lastMessage': 'เริ่มการสนทนา',
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastSenderId': actorUid,
+    };
+    if (snap.exists) {
+      batch.update(ref, {
+        ...common,
+        'lastAdminId': FieldValue.delete(),
+        'closedBy': FieldValue.delete(),
+        'lastReadAt.$actorUid': FieldValue.serverTimestamp(),
+      });
+    } else {
+      batch.set(ref, {
+        'type': 'support',
+        ...common,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastReadAt': {actorUid: FieldValue.serverTimestamp()},
+      });
+    }
+    batch.set(ref.collection('messages').doc(), {
+      'senderId': actorUid,
+      'type': 'system',
+      'text': 'started',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
+
+  Future<void> endSupport(String chatId, String adminUid) {
+    final ref = _chat(chatId);
+    final batch = _db.batch()
+      ..update(ref, {
+        'status': 'closed',
+        'closedBy': adminUid,
+        'lastMessage': 'จบการสนทนา',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastSenderId': adminUid,
+        'lastReadAt.$adminUid': FieldValue.serverTimestamp(),
+      })
+      ..set(ref.collection('messages').doc(), {
+        'senderId': adminUid,
+        'type': 'system',
+        'text': 'closed',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    return batch.commit();
+  }
 
   Future<String> ensurePrivateChat(String myUid, String friendUid) async {
     final chatId = 'p_${friendPairId(myUid, friendUid)}';
@@ -358,12 +421,14 @@ class ChatRepository {
       ...content,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    if (chatTypeOf(chatId) != ChatType.community) {
+    final type = chatTypeOf(chatId);
+    if (type != ChatType.community) {
       batch.update(_chat(chatId), {
         'lastMessage': preview,
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastSenderId': myUid,
         'lastReadAt.$myUid': FieldValue.serverTimestamp(),
+        if (type == ChatType.support && chatId != supportChatId(myUid)) 'lastAdminId': myUid,
       });
     }
     return batch.commit();
@@ -406,6 +471,10 @@ final chatProvider = StreamProvider.autoDispose.family<ChatRoom?, String>(
 final messagesProvider =
     StreamProvider.autoDispose.family<List<ChatMessage>, String>(
   (ref, chatId) => ref.watch(chatRepositoryProvider).watchMessages(chatId),
+);
+
+final supportChatsProvider = StreamProvider.autoDispose<List<ChatRoom>>(
+  (ref) => ref.watch(chatRepositoryProvider).watchSupportChats(),
 );
 
 final myChatsProvider = StreamProvider.autoDispose<List<ChatRoom>>((ref) {
