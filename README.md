@@ -19,5 +19,5 @@
 
 ## Technology
 
-- **Flutter** (Android, ขั้นต่ำ Android 8.0 / API 26)
+- **Flutter** (Android, ตั้งแต่ Android 8.0 ขึ้นไป)
 - **Firebase**: Authentication (Phone), Cloud Firestore, Function, Storage
